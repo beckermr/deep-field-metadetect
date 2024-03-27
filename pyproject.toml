@@ -1,0 +1,35 @@
+[build-system]
+requires = [
+    "setuptools>=45",
+    "setuptools_scm>=7",
+    "tomli>=1.0.0; python_version < '3.11'",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deep-metadetection"
+authors = [
+    {name = "Matthew R. Becker", email = "mrbecker@anl.gov"},
+]
+description = "deep-field metadetection"
+dynamic = ["version"]
+license = {file = "License"}
+readme = "README.md"
+
+[project.urls]
+home = "https://github.com/beckermr/deep-metadetection"
+
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
+packages = {find = {exclude=["tests*"]}}
+
+[tool.setuptools_scm]
+write_to = "deep_metadetection/_version.py"
+write_to_template = "__version__ = '{version}'\n"
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
