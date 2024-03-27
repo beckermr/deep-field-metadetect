@@ -59,7 +59,7 @@ jobs:
             --cov=deep_metadetection \
             --cov=tests \
             --cov-config=.coveragerc \
-            --cov-report term-missing \
+            --cov-report=xml,term-missing \
             --durations 10 \
             deep_metadetection
 
