@@ -1,0 +1,72 @@
+name: tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request: null
+
+env:
+  PY_COLORS: "1"
+
+jobs:
+  tests:
+    name: tests
+    runs-on: "ubuntu-latest"
+    defaults:
+      run:
+        shell: bash -leo pipefail {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: environment.yml
+          environment-name: dfmdet
+
+      - name: install code
+        run: |
+          pip install --no-deps --no-build-isolation -e .
+
+      - name: test versions
+        run: |
+          pip uninstall deep-metadetection --yes
+          [[ $(python setup.py --version) != "0.0.0" ]] || exit 1
+
+          rm -rf dist/*
+          python setup.py sdist
+          pip install -vv --no-deps --no-build-isolation dist/*.tar.gz
+          cd ..
+          python -c "import deep_metadetection; assert deep_metadetection.__version__ != '0.0.0'"
+          cd -
+          pip uninstall deep-metadetection --yes
+
+          rm -rf dist/*
+          python -m build --sdist . --outdir dist
+          pip install --no-deps --no-build-isolation dist/*.tar.gz
+          cd ..
+          python -c "import deep_metadetection; assert deep_metadetection.__version__ != '0.0.0'"
+          cd -
+          pip uninstall deep-metadetection --yes
+
+          python -m pip install -v --no-deps --no-build-isolation -e .
+
+      - name: run pytest
+        run: |
+          pytest \
+            -v \
+            --cov=deep_metadetection \
+            --cov=tests \
+            --cov-config=.coveragerc \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --durations 10 \
+            deep_metadetection
+
+      - name: upload codecov
+        uses: codecov/codecov-action@v3
+
+      # - name: run codecov
+      #   run: |
+      #    codecov -X gcov

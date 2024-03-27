@@ -1,0 +1,25 @@
+name: dfmdet
+channels:
+  - conda-forge
+platforms:
+  - osx-arm64
+  - linux-64
+  - osx-64
+dependencies:
+  # run
+  - python=3.11
+  - numpy
+  - tqdm
+
+  # install
+  - pip
+  - setuptools
+  - setuptools_scm>=7
+
+  # dev
+  - pytest<8.1.0
+  - pytest-xdist
+  - pytest-cov
+  - python-build
+  - codecov
+  - pre-commit

@@ -1,0 +1,12 @@
+[run]
+source =
+    deep_metadetection
+[report]
+omit =
+    */python?.?/*
+    # ignore _version.py
+    .*version.*
+    *_version.py
+
+exclude_lines =
+    if __name__ == '__main__':
