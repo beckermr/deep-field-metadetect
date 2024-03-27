@@ -13,7 +13,7 @@ authors = [
 ]
 description = "deep-field metadetection"
 dynamic = ["version"]
-license = {file = "License"}
+license = {file = "LICENSE"}
 readme = "README.md"
 
 [project.urls]
