@@ -61,7 +61,7 @@ jobs:
             --cov-config=.coveragerc \
             --cov-report term-missing \
             --durations 10 \
-            tests
+            deep_metadetection
 
       - name: run codecov
         run: |
