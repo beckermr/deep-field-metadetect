@@ -63,6 +63,9 @@ jobs:
             --durations 10 \
             deep_metadetection
 
-      - name: run codecov
-        run: |
-         codecov -X gcov
+      - name: upload codecov
+        uses: codecov/codecov-action@v3
+
+      # - name: run codecov
+      #   run: |
+      #    codecov -X gcov
