@@ -8,8 +8,9 @@ platforms:
 dependencies:
   # run
   - python=3.11
+  - galsim
+  - numba
   - numpy
-  - tqdm
 
   # install
   - pip
