@@ -8,7 +8,10 @@ platforms:
 dependencies:
   # run
   - python=3.11
+  - esutil
   - galsim
+  - joblib
+  - ngmix
   - numba
   - numpy
 
