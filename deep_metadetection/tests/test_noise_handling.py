@@ -38,7 +38,7 @@ def test_noise_handling():
     seeds = rng.randint(0, 2**30, size=1000) + 1
     print(flush=True)
     covs = {}
-    for seed in PBar(seeds, desc="running noise sims", ncols=80):
+    for seed in PBar(seeds, desc="running noise sims"):
         res = _simple_noise_sim(seed)
         for k, v in res.items():
             if k not in covs:
