@@ -3,7 +3,7 @@ import numpy as np
 
 
 @numba.njit()
-def _meas_cov(im, msk, cov, nrm):
+def _meas_cov(im, msk, cov, nrm):  # pragma: no cover
     for ic in range(im.shape[0]):
         io_min = max(ic - 1, 0)
         io_max = min(ic + 1, im.shape[0] - 1) + 1
