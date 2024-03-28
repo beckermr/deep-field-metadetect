@@ -44,15 +44,19 @@ def test_meas_pixel_cov_gauss():
         (0.1, 0.3),
     ],
 )
-def test_meas_pixel_cov_sheared(g1, g2):
+@pytest.mark.parametrize("mfrac", [0.0, 0.1])
+def test_meas_pixel_cov_sheared(g1, g2, mfrac):
+    rng = np.random.RandomState(seed=10)
+    gs_rng = galsim.BaseDeviate(seed=10)
+
     var = 2.5**2
     covs = []
     for _ in range(1000):
         img = galsim.ImageD(101, 101)
-        nse = galsim.UncorrelatedNoise(var).shear(g1=g1, g2=g2)
+        nse = galsim.UncorrelatedNoise(var, rng=gs_rng).shear(g1=g1, g2=g2)
         nse.applyTo(img)
-
-        covs.append(meas_pixel_cov(img.array, np.ones_like(img.array).astype(bool)))
+        msk = rng.uniform(size=img.array.shape) >= mfrac
+        covs.append(meas_pixel_cov(img.array, msk))
     mn_cov = np.mean(covs, axis=0)
     true_cov = galsim.ImageD(3, 3)
     true_cov = nse.drawImage(true_cov).array
@@ -66,15 +70,21 @@ def test_meas_pixel_cov_sheared(g1, g2):
     )
 
 
-def test_meas_pixel_cov_convolved():
+@pytest.mark.parametrize("mfrac", [0.0, 0.1])
+def test_meas_pixel_cov_convolved(mfrac):
+    rng = np.random.RandomState(seed=10)
+    gs_rng = galsim.BaseDeviate(seed=10)
+
     var = 2.5**2
     covs = []
     for _ in range(1000):
         img = galsim.ImageD(101, 101)
-        nse = galsim.UncorrelatedNoise(var).convolvedWith(galsim.Gaussian(fwhm=4))
+        nse = galsim.UncorrelatedNoise(var, rng=gs_rng).convolvedWith(
+            galsim.Gaussian(fwhm=4)
+        )
         nse.applyTo(img)
-
-        covs.append(meas_pixel_cov(img.array, np.ones_like(img.array).astype(bool)))
+        msk = rng.uniform(size=img.array.shape) >= mfrac
+        covs.append(meas_pixel_cov(img.array, msk))
     mn_cov = np.mean(covs, axis=0)
     true_cov = galsim.ImageD(3, 3)
     true_cov = nse.drawImage(true_cov).array
