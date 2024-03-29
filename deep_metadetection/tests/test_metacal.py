@@ -13,7 +13,7 @@ from deep_metadetection.utils import (
 )
 
 
-def _run_single_sim_pair(seed, s2n):
+def _run_single_sim_pair(seed, s2n):  # pragma: no cover
     obs_plus, *_ = make_simple_sim(
         seed=seed,
         g1=0.02,
@@ -72,7 +72,7 @@ def test_metacal():
 
 
 @pytest.mark.slow
-def test_metacal_slow():
+def test_metacal_slow():  # pragma: no cover
     nsims = 1_000_000
     chunk_size = multiprocessing.cpu_count() * 100
     nchunks = nsims // chunk_size + 1
