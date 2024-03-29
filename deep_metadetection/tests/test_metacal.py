@@ -41,6 +41,12 @@ def _run_single_sim_pair(seed, s2n):  # pragma: no cover
     return res_p, res_m
 
 
+def test_metacal_smoke():
+    res_p, res_m = _run_single_sim_pair(1234, 1e8)
+    for col in res_p.dtype.names:
+        assert np.isfinite(res_p[col]).all()
+
+
 def test_metacal():
     nsims = 50
 
@@ -71,8 +77,9 @@ def test_metacal():
     assert np.abs(c2) < 4.0 * c2err, (c2, c2err)
 
 
+@pytest.mark.no_cover
 @pytest.mark.slow
-def test_metacal_slow():  # pragma: no cover
+def test_metacal_slow():
     nsims = 1_000_000
     chunk_size = multiprocessing.cpu_count() * 100
     nchunks = nsims // chunk_size + 1
