@@ -177,7 +177,7 @@ def test_deep_metacal_widelows2n():
 
 
 @pytest.mark.slow
-def test_deep_metacal_slow():
+def test_deep_metacal_slow():  # pragma: no cover
     nsims = 1_000_000
     chunk_size = multiprocessing.cpu_count() * 100
     nchunks = nsims // chunk_size + 1
