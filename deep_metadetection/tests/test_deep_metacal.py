@@ -53,8 +53,6 @@ def _run_sim_pair(seed, s2n, deep_noise_fac, deep_psf_fac, skip_wide, skip_deep)
         skip_wide,
         skip_deep,
     )
-    if res_p is None:
-        return None
 
     res_m = _run_single_sim(
         seed,
@@ -66,10 +64,14 @@ def _run_sim_pair(seed, s2n, deep_noise_fac, deep_psf_fac, skip_wide, skip_deep)
         skip_wide,
         skip_deep,
     )
-    if res_m is None:
-        return None
 
     return res_p, res_m
+
+
+def test_deep_metacal_smoke():
+    res_p, res_m = _run_sim_pair(1234, 1e8)
+    for col in res_p.dtype.names:
+        assert np.isfinite(res_p[col]).all()
 
 
 def test_deep_metacal():
