@@ -8,8 +8,12 @@ platforms:
 dependencies:
   # run
   - python=3.11
+  - esutil
+  - galsim
+  - joblib
+  - ngmix
+  - numba
   - numpy
-  - tqdm
 
   # install
   - pip
@@ -21,5 +25,6 @@ dependencies:
   - pytest-xdist
   - pytest-cov
   - python-build
+  - pytest-skip-slow
   - codecov
   - pre-commit

@@ -9,6 +9,10 @@ on:
 env:
   PY_COLORS: "1"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   tests:
     name: tests
@@ -66,7 +70,3 @@ jobs:
 
       - name: upload codecov
         uses: codecov/codecov-action@v3
-
-      # - name: run codecov
-      #   run: |
-      #    codecov -X gcov
