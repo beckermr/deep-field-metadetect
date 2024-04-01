@@ -4,7 +4,10 @@ import joblib
 import numpy as np
 import pytest
 
-from deep_metadetection.metacal import metacal_wide_and_deep_psf_matched
+from deep_metadetection.metacal import (
+    metacal_op_shears,
+    metacal_wide_and_deep_psf_matched,
+)
 from deep_metadetection.utils import (
     estimate_m_and_c,
     fit_gauss_mom,
@@ -217,3 +220,120 @@ def test_deep_metacal_slow(skip_wide, skip_deep):  # pragma: no cover
         assert np.abs(m) >= max(5e-4, 3 * merr), (m, merr)
     assert np.abs(c1) < 4.0 * c1err, (c1, c1err)
     assert np.abs(c2) < 4.0 * c2err, (c2, c2err)
+
+
+def _run_single_sim_maybe_mcal(
+    seed,
+    s2n,
+    g1,
+    g2,
+    deep_noise_fac,
+    deep_psf_fac,
+    use_mcal,
+    zero_flux,
+):
+    obs_w, obs_d, obs_dn = make_simple_sim(
+        seed=seed,
+        g1=g1,
+        g2=g2,
+        s2n=s2n,
+        deep_noise_fac=deep_noise_fac,
+        deep_psf_fac=deep_psf_fac,
+        obj_flux_factor=0.0 if zero_flux else 1.0,
+    )
+    if use_mcal:
+        mcal_res = metacal_op_shears(
+            obs_w,
+        )
+    else:
+        mcal_res = metacal_wide_and_deep_psf_matched(
+            obs_w,
+            obs_d,
+            obs_dn,
+        )
+    return fit_gauss_mom(mcal_res), mcal_res
+
+
+def test_deep_metacal_noise_object_s2n():
+    nsims = 100
+    noise_fac = 1 / np.sqrt(10)
+    s2n = 10
+
+    rng = np.random.RandomState(seed=34132)
+    seeds = rng.randint(size=nsims, low=1, high=2**29)
+
+    dmcal_res = []
+    mcal_res = []
+    for seed in seeds:
+        dmcal_res.append(
+            _run_single_sim_maybe_mcal(
+                seed,
+                s2n,
+                0.02,
+                0.0,
+                noise_fac,
+                1.0,
+                False,
+                False,
+            )
+        )
+        mcal_res.append(
+            _run_single_sim_maybe_mcal(
+                seed,
+                s2n,
+                0.02,
+                0.0,
+                noise_fac,
+                1.0,
+                True,
+                False,
+            )
+        )
+
+    dmcal_res = np.concatenate([d[0] for d in dmcal_res if d is not None], axis=0)
+    mcal_res = np.concatenate([d[0] for d in mcal_res if d is not None], axis=0)
+    dmcal_res = dmcal_res[dmcal_res["mdet_step"] == "noshear"]
+    mcal_res = mcal_res[mcal_res["mdet_step"] == "noshear"]
+
+    ratio = (np.median(dmcal_res["wmom_s2n"]) / np.median(mcal_res["wmom_s2n"])) ** 2
+    print("s2n ratio squared:", ratio)
+    assert np.allclose(ratio, 2, atol=0, rtol=0.2), ratio
+
+    dmcal_res = []
+    mcal_res = []
+    for seed in seeds:
+        dmcal_res.append(
+            _run_single_sim_maybe_mcal(
+                seed,
+                s2n,
+                0.02,
+                0.0,
+                noise_fac,
+                1.0,
+                False,
+                True,
+            )
+        )
+        mcal_res.append(
+            _run_single_sim_maybe_mcal(
+                seed,
+                s2n,
+                0.02,
+                0.0,
+                noise_fac,
+                1.0,
+                True,
+                True,
+            )
+        )
+
+    dmcal_res = np.array(
+        [np.std(d[1]["noshear"].image) for d in dmcal_res if d is not None]
+    )
+    mcal_res = np.array(
+        [np.std(d[1]["noshear"].image) for d in mcal_res if d is not None]
+    )
+
+    ratio = (np.median(dmcal_res) / np.median(mcal_res)) ** 2
+    print("noise ratio squared:", ratio)
+    assert np.allclose(ratio, 0.5, atol=0, rtol=0.2), ratio
