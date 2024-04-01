@@ -12,6 +12,23 @@ from deep_metadetection.metacal import DEFAULT_SHEARS
 GLOBAL_START_TIME = time.time()
 
 
+def get_measure_mcal_shear_quants_dtype(kind):
+    return [
+        (kind + "_tot_g1p", "f8"),
+        (kind + "_tot_g1m", "f8"),
+        (kind + "_tot_g1", "f8"),
+        (kind + "_tot_g2p", "f8"),
+        (kind + "_tot_g2m", "f8"),
+        (kind + "_tot_g2", "f8"),
+        (kind + "_num_g1p", "f8"),
+        (kind + "_num_g1m", "f8"),
+        (kind + "_num_g1", "f8"),
+        (kind + "_num_g2p", "f8"),
+        (kind + "_num_g2m", "f8"),
+        (kind + "_num_g2", "f8"),
+    ]
+
+
 def measure_mcal_shear_quants(data, kind="wmom", s2n_cut=10, t_ratio_cut=1.2):
     """Measure metacal shear results.
 
@@ -50,21 +67,7 @@ def measure_mcal_shear_quants(data, kind="wmom", s2n_cut=10, t_ratio_cut=1.2):
             mdet_step=mdet_step,
         )
 
-    dt = [
-        (kind + "_tot_g1p", "f8"),
-        (kind + "_tot_g1m", "f8"),
-        (kind + "_tot_g1", "f8"),
-        (kind + "_tot_g2p", "f8"),
-        (kind + "_tot_g2m", "f8"),
-        (kind + "_tot_g2", "f8"),
-        (kind + "_num_g1p", "f8"),
-        (kind + "_num_g1m", "f8"),
-        (kind + "_num_g1", "f8"),
-        (kind + "_num_g2p", "f8"),
-        (kind + "_num_g2m", "f8"),
-        (kind + "_num_g2", "f8"),
-    ]
-    res = np.zeros(1, dtype=dt)
+    res = np.zeros(1, dtype=get_measure_mcal_shear_quants_dtype(kind))
     res[kind + "_tot_g1p"] = np.nansum(data[kind + "_g1"][msks["1p"]])
     res[kind + "_tot_g1m"] = np.nansum(data[kind + "_g1"][msks["1m"]])
     res[kind + "_tot_g1"] = np.nansum(data[kind + "_g1"][msks["noshear"]])
