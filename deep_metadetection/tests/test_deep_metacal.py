@@ -74,48 +74,17 @@ def test_deep_metacal_smoke():
         assert np.isfinite(res_p[col]).all()
 
 
-def test_deep_metacal():
+@pytest.mark.parametrize("deep_psf_ratio", [0.8, 1, 1.2])
+def test_deep_metacal(deep_psf_ratio):
     nsims = 50
     noise_fac = 1 / np.sqrt(10)
 
     rng = np.random.RandomState(seed=34132)
     seeds = rng.randint(size=nsims, low=1, high=2**29)
     jobs = [
-        joblib.delayed(_run_sim_pair)(seed, 1e8, noise_fac, 1, False, False)
-        for seed in seeds
-    ]
-    outputs = joblib.Parallel(n_jobs=-1, verbose=10)(jobs)
-    res_p = []
-    res_m = []
-    for res in outputs:
-        if res is not None:
-            res_p.append(res[0])
-            res_m.append(res[1])
-
-    m, merr, c1, c1err, c2, c2err = estimate_m_and_c(
-        np.concatenate(res_p),
-        np.concatenate(res_m),
-        0.02,
-        jackknife=len(res_p),
-    )
-
-    print(f" m: {m / 1e-3: f} +/- {3 * merr / 1e-3: f} [1e-3, 3-sigma]", flush=True)
-    print(f"c1: {c1 / 1e-5: f} +/- {3 * c1err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
-    print(f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
-
-    assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
-    assert np.abs(c1) < 4.0 * c1err, (c1, c1err)
-    assert np.abs(c2) < 4.0 * c2err, (c2, c2err)
-
-
-def test_deep_metacal_psfmatch():
-    nsims = 50
-    noise_fac = 1 / np.sqrt(10)
-
-    rng = np.random.RandomState(seed=34132)
-    seeds = rng.randint(size=nsims, low=1, high=2**29)
-    jobs = [
-        joblib.delayed(_run_sim_pair)(seed, 1e8, noise_fac, 0.8, False, False)
+        joblib.delayed(_run_sim_pair)(
+            seed, 1e8, noise_fac, deep_psf_ratio, False, False
+        )
         for seed in seeds
     ]
     outputs = joblib.Parallel(n_jobs=-1, verbose=10)(jobs)
@@ -177,8 +146,16 @@ def test_deep_metacal_widelows2n():
 
 
 @pytest.mark.slow
-def test_deep_metacal_slow():  # pragma: no cover
-    nsims = 1_000_000
+@pytest.mark.parametrize(
+    "skip_wide,skip_deep", [(True, True), (True, False), (False, True), (False, False)]
+)
+def test_deep_metacal_slow(skip_wide, skip_deep):  # pragma: no cover
+    if not skip_wide and not skip_deep:
+        nsims = 1_000_000
+        s2n = 20
+    else:
+        nsims = 100_000
+        s2n = 10
     chunk_size = multiprocessing.cpu_count() * 100
     nchunks = nsims // chunk_size + 1
     noise_fac = 1 / np.sqrt(10)
@@ -192,7 +169,9 @@ def test_deep_metacal_slow():  # pragma: no cover
     for chunk in range(nchunks):
         _seeds = seeds[loc : loc + chunk_size]
         jobs = [
-            joblib.delayed(_run_sim_pair)(seed, 20, noise_fac, 0.8, False, False)
+            joblib.delayed(_run_sim_pair)(
+                seed, s2n, noise_fac, 0.8, skip_wide, skip_deep
+            )
             for seed in _seeds
         ]
         outputs = joblib.Parallel(n_jobs=-1, verbose=10)(jobs)
@@ -222,12 +201,16 @@ def test_deep_metacal_slow():  # pragma: no cover
             f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True
         )
 
-        assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
+        if not skip_wide and not skip_deep:
+            assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
         assert np.abs(c1) < 4.0 * c1err, (c1, c1err)
         assert np.abs(c2) < 4.0 * c2err, (c2, c2err)
 
         loc += chunk_size
 
-    assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
+    if not skip_wide and not skip_deep:
+        assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
+    else:
+        assert np.abs(m) >= max(5e-4, 3 * merr), (m, merr)
     assert np.abs(c1) < 4.0 * c1err, (c1, c1err)
     assert np.abs(c2) < 4.0 * c2err, (c2, c2err)
