@@ -85,12 +85,12 @@ def test_estimate_m_and_c(g_true, step, swap12, jackknife):
     assert np.allclose(c2, 0.05, rtol=0, atol=1e-6)
 
 
+@pytest.mark.parametrize("swap12", [True, False])
 @pytest.mark.parametrize("seed", [1, 3, 454, 3454, 23443, 42])
 @pytest.mark.parametrize("jackknife", [100])
-def test_estimate_m_and_c_err(jackknife, seed):
+def test_estimate_m_and_c_err(jackknife, seed, swap12):
     g_true = 0.02
     step = 0.01
-    swap12 = False
 
     rng = np.random.RandomState(seed=seed)
 
