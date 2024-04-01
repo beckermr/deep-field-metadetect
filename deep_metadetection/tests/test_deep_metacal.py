@@ -152,10 +152,8 @@ def test_deep_metacal_widelows2n():
 def test_deep_metacal_slow(skip_wide, skip_deep):  # pragma: no cover
     if not skip_wide and not skip_deep:
         nsims = 1_000_000
-        s2n = 20
     else:
         nsims = 100_000
-        s2n = 10
     chunk_size = multiprocessing.cpu_count() * 100
     nchunks = nsims // chunk_size + 1
     noise_fac = 1 / np.sqrt(10)
@@ -170,7 +168,7 @@ def test_deep_metacal_slow(skip_wide, skip_deep):  # pragma: no cover
         _seeds = seeds[loc : loc + chunk_size]
         jobs = [
             joblib.delayed(_run_sim_pair)(
-                seed, s2n, noise_fac, 0.8, skip_wide, skip_deep
+                seed, 20, noise_fac, 0.8, skip_wide, skip_deep
             )
             for seed in _seeds
         ]
