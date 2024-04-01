@@ -7,10 +7,10 @@ from deep_metadetection.utils import (
 )
 
 
-@pytest.mark.parametrize('swap12', [False])
-@pytest.mark.parametrize('step', [0.005, 0.01])
-@pytest.mark.parametrize('g_true', [0.05, 0.01, 0.02])
-@pytest.mark.parametrize('jackknife', [100])
+@pytest.mark.parametrize("swap12", [True, False])
+@pytest.mark.parametrize("step", [0.005, 0.01])
+@pytest.mark.parametrize("g_true", [0.05, 0.01, 0.02])
+@pytest.mark.parametrize("jackknife", [100])
 def test_estimate_m_and_c(g_true, step, swap12, jackknife):
     rng = np.random.RandomState(seed=10)
 
@@ -77,8 +77,7 @@ def test_estimate_m_and_c(g_true, step, swap12, jackknife):
             mres[i]["wmom_tot_g2"] = g2
 
     m, _, c1, _, c2, _ = estimate_m_and_c(
-        pres, mres, g_true, swap12=swap12, step=step, jackknife=jackknife,
-        silent=True
+        pres, mres, g_true, swap12=swap12, step=step, jackknife=jackknife, silent=True
     )
 
     assert np.allclose(m, 0.01)
@@ -86,8 +85,8 @@ def test_estimate_m_and_c(g_true, step, swap12, jackknife):
     assert np.allclose(c2, 0.05, rtol=0, atol=1e-6)
 
 
-@pytest.mark.parametrize('seed', [1, 3, 454, 3454, 23443, 42])
-@pytest.mark.parametrize('jackknife', [100])
+@pytest.mark.parametrize("seed", [1, 3, 454, 3454, 23443, 42])
+@pytest.mark.parametrize("jackknife", [100])
 def test_estimate_m_and_c_err(jackknife, seed):
     g_true = 0.02
     step = 0.01
@@ -161,8 +160,7 @@ def test_estimate_m_and_c_err(jackknife, seed):
         mres[i]["wmom_tot_g2"] = g2
 
     m, merr, c1, c1err, c2, c2err = estimate_m_and_c(
-        pres, mres, g_true, swap12=swap12, step=step,
-        jackknife=jackknife, silent=True
+        pres, mres, g_true, swap12=swap12, step=step, jackknife=jackknife, silent=True
     )
 
     assert np.abs(m - 0.01) <= 3 * merr, (m, merr)
