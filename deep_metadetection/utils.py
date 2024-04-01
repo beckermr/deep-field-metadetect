@@ -224,6 +224,23 @@ def _run_jackknife(pd, md, kind, step, g_true, jackknife):
     return m_mn, m_std, c1_mn, c1_std, c2_mn, c2_std
 
 
+def _swap12_arr(d, kind):
+    tails = ["g1p", "g1m", "g1"]
+    stats = ["tot", "num"]
+    old_data = {}
+    for stat in stats:
+        for tail in tails:
+            col = kind + "_" + stat + "_" + tail
+            old_data[kind + "_" + stat + "_" + tail] = d[col].copy()
+    for stat in stats:
+        for tail in tails:
+            col_old = kind + "_" + stat + "_" + tail
+            col_new = kind + "_" + stat + "_" + tail.replace("1", "2")
+            d[col_old][:] = d[col_new]
+            d[col_new][:] = old_data[col_old]
+    return d
+
+
 def estimate_m_and_c(
     presults,
     mresults,
@@ -278,7 +295,8 @@ def estimate_m_and_c(
 
     with timer("prepping data for m,c measurement", silent=silent):
         if swap12:
-            raise NotImplementedError("swap12 not implemented yet")
+            presults = _swap12_arr(presults, kind)
+            mresults = _swap12_arr(mresults, kind)
 
     with timer("running jackknife", silent=silent):
         return _run_jackknife(presults, mresults, kind, step, g_true, jackknife)

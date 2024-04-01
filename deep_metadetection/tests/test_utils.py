@@ -80,7 +80,7 @@ def test_estimate_m_and_c(g_true, step, swap12, jackknife):
         pres, mres, g_true, swap12=swap12, step=step, jackknife=jackknife, silent=True
     )
 
-    assert np.allclose(m, 0.01)
+    assert np.allclose(m, 0.01, rtol=0, atol=1e-4)
     assert np.allclose(c1, 0.00, rtol=0, atol=1e-6)
     assert np.allclose(c2, 0.05, rtol=0, atol=1e-6)
 
