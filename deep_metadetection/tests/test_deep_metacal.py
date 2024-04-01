@@ -72,6 +72,7 @@ def test_deep_metacal_smoke():
     res_p, res_m = _run_sim_pair(1234, 1e8, 1.0 / np.sqrt(10), 1, False, False)
     for col in res_p.dtype.names:
         assert np.isfinite(res_p[col]).all()
+        assert np.isfinite(res_m[col]).all()
 
 
 @pytest.mark.parametrize("deep_psf_ratio", [0.8, 1, 1.2])

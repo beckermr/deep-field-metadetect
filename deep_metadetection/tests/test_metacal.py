@@ -45,6 +45,7 @@ def test_metacal_smoke():
     res_p, res_m = _run_single_sim_pair(1234, 1e8)
     for col in res_p.dtype.names:
         assert np.isfinite(res_p[col]).all()
+        assert np.isfinite(res_m[col]).all()
 
 
 def test_metacal():
