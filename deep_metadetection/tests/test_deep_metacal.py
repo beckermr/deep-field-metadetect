@@ -203,6 +203,8 @@ def test_deep_metacal_slow(skip_wide, skip_deep):  # pragma: no cover
 
         if not skip_wide and not skip_deep:
             assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
+        elif 3 * merr < 5e-3:
+            assert np.abs(m) >= max(5e-4, 3 * merr), (m, merr)
         assert np.abs(c1) < 4.0 * c1err, (c1, c1err)
         assert np.abs(c2) < 4.0 * c2err, (c2, c2err)
 
