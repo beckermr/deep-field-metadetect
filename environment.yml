@@ -25,5 +25,6 @@ dependencies:
   - pytest-xdist
   - pytest-cov
   - python-build
+  - pytest-skip-slow
   - codecov
   - pre-commit
