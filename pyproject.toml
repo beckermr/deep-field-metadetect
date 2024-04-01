@@ -33,3 +33,7 @@ line-length = 88
 
 [tool.isort]
 profile = "black"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+preview = true
