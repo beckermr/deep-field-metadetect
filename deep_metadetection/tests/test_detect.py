@@ -1,19 +1,21 @@
+import ngmix
 import numpy as np
 import pytest
-
-import ngmix
 
 from deep_metadetection.detect import make_detection_coadd
 from deep_metadetection.utils import make_simple_sim
 
 
-@pytest.mark.parametrize('has_bmask', [True, False])
-@pytest.mark.parametrize('detbands', [
-    None,
-    [True, True, True],
-    [True, False, True],
-    [False, True, False],
-])
+@pytest.mark.parametrize("has_bmask", [True, False])
+@pytest.mark.parametrize(
+    "detbands",
+    [
+        None,
+        [True, True, True],
+        [True, False, True],
+        [False, True, False],
+    ],
+)
 def test_make_detection_coadd(detbands, has_bmask):
     seed = 10
     rng = np.random.RandomState(seed)
@@ -35,12 +37,16 @@ def test_make_detection_coadd(detbands, has_bmask):
                 buff=20,
             )
             if has_bmask:
-                obs.bmask = rng.choice([0, 2**0, 2**5], size=obs.image.shape, p=[0.8, 0.1, 0.1]).astype(np.int32)
+                obs.bmask = rng.choice(
+                    [0, 2**0, 2**5], size=obs.image.shape, p=[0.8, 0.1, 0.1]
+                ).astype(np.int32)
                 assert np.any(obs.bmask != 0)
             else:
                 obs.bmask = None
 
-            obs.weight = obs.weight * rng.choice([0, 1], size=obs.image.shape, p=[0.1, 0.9])
+            obs.weight = obs.weight * rng.choice(
+                [0, 1], size=obs.image.shape, p=[0.1, 0.9]
+            )
             assert np.any(obs.weight == 0)
 
             obslist.append(obs)
@@ -76,7 +82,10 @@ def test_make_detection_coadd(detbands, has_bmask):
         msk = all_vars[i] > 0
         all_vars[i][msk] = 1.0 / all_vars[i][msk]
         all_vars[i][~msk] = np.inf
-    expected_var = np.sum([wgt**2 * var for var, wgt in zip(all_vars, wgts)], axis=0) / np.sum(wgts)**2
+    expected_var = (
+        np.sum([wgt**2 * var for var, wgt in zip(all_vars, wgts)], axis=0)
+        / np.sum(wgts) ** 2
+    )
     assert np.allclose(detobs.weight, 1.0 / expected_var)
     assert np.any(detobs.weight == 0)
 
@@ -91,12 +100,19 @@ def test_make_detection_coadd(detbands, has_bmask):
 
     if False:
         import proplot as pplt
-        fig, axs = pplt.subplots(nrows=1, ncols=n_bands+1, figsize=(3 * (n_bands + 1), 3))
+
+        fig, axs = pplt.subplots(
+            nrows=1, ncols=n_bands + 1, figsize=(3 * (n_bands + 1), 3)
+        )
         for i in range(n_bands):
-            axs[i].imshow(np.arcsinh(tot_mbobs[i][0].image * np.sqrt(tot_mbobs[i][0].weight)))
-            axs[i].format(title=f'band {i}', grid=False)
+            axs[i].imshow(
+                np.arcsinh(tot_mbobs[i][0].image * np.sqrt(tot_mbobs[i][0].weight))
+            )
+            axs[i].format(title=f"band {i}", grid=False)
         i = n_bands
         axs[i].imshow(np.arcsinh(detobs.image * np.sqrt(detobs.weight)))
-        axs[i].format(title='coadd', grid=False)
+        axs[i].format(title="coadd", grid=False)
         fig.show()
-        import pdb; pdb.set_trace()
+        import pdb
+
+        pdb.set_trace()

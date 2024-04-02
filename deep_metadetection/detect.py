@@ -1,17 +1,15 @@
-import numpy as np
-
 import ngmix
+import numpy as np
 import sxdes
-
 
 BMASK_EDGE = 2**30
 DEFAULT_IMAGE_VALUES = {
-    'image': 0.0,
-    'weight': 0.0,
-    'seg': 0,
-    'bmask': BMASK_EDGE,
-    'noise': 0.0,
-    'mfrac': 0.0,
+    "image": 0.0,
+    "weight": 0.0,
+    "seg": 0,
+    "bmask": BMASK_EDGE,
+    "noise": 0.0,
+    "mfrac": 0.0,
 }
 
 
@@ -28,9 +26,7 @@ def make_detection_coadd(mbobs, detbands=None):
         if not detbands[i]:
             continue
         for obs in obslist:
-            weights.append(
-                np.median(obs.weight[obs.weight > 0])
-            )
+            weights.append(np.median(obs.weight[obs.weight > 0]))
 
     weights = np.array(weights)
     wsum = weights.sum()
@@ -46,7 +42,7 @@ def make_detection_coadd(mbobs, detbands=None):
             msk = var > 0
             var[msk] = 1.0 / var[msk]
             var[~msk] = np.inf
-            detvar += weights[loc]**2 * var
+            detvar += weights[loc] ** 2 * var
             if obs.has_bmask():
                 mask |= obs.bmask
 
@@ -64,7 +60,10 @@ def make_detection_coadd(mbobs, detbands=None):
 
 
 def run_detection_sep(
-    detobs, sep_config=None, detect_thresh=None, nodet_flags=0,
+    detobs,
+    sep_config=None,
+    detect_thresh=None,
+    nodet_flags=0,
 ):
     if sep_config is None:
         sep_config = sxdes.SX_CONFIG
@@ -123,8 +122,8 @@ def _get_subobs(obs, x, y, start_x, start_y, end_x, end_y, box_size):
         if key == "image":
             subim = np.zeros((box_size, box_size), dtype=obs.image.dtype)
             subim += DEFAULT_IMAGE_VALUES[key]
-            subim[sub_y_box[0]:sub_y_box[1], sub_x_box[0]:sub_x_box[1]] = obs.image[
-                orig_y_box[0]:orig_y_box[1], orig_x_box[0]:orig_x_box[1]
+            subim[sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]] = obs.image[
+                orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]
             ]
         elif key == "bmask":
             if obs.has_bmask():
@@ -135,20 +134,22 @@ def _get_subobs(obs, x, y, start_x, start_y, end_x, end_y, box_size):
             subim += DEFAULT_IMAGE_VALUES[key]
 
             if obs.has_bmask():
-                subim[sub_y_box[0]:sub_y_box[1], sub_x_box[0]:sub_x_box[1]] = obs.bmask[
-                    orig_y_box[0]:orig_y_box[1], orig_x_box[0]:orig_x_box[1]
-                ]
+                subim[sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]] = (
+                    obs.bmask[
+                        orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]
+                    ]
+                )
         elif key == "noise" and obs.has_noise():
             subim = np.zeros((box_size, box_size), dtype=obs.noise.dtype)
             subim += DEFAULT_IMAGE_VALUES[key]
-            subim[sub_y_box[0]:sub_y_box[1], sub_x_box[0]:sub_x_box[1]] = obs.noise[
-                orig_y_box[0]:orig_y_box[1], orig_x_box[0]:orig_x_box[1]
+            subim[sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]] = obs.noise[
+                orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]
             ]
         elif key == "mfrac" and obs.has_mfrac():
             subim = np.zeros((box_size, box_size), dtype=obs.mfrac.dtype)
             subim += DEFAULT_IMAGE_VALUES[key]
-            subim[sub_y_box[0]:sub_y_box[1], sub_x_box[0]:sub_x_box[1]] = obs.mfrac[
-                orig_y_box[0]:orig_y_box[1], orig_x_box[0]:orig_x_box[1]
+            subim[sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]] = obs.mfrac[
+                orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]
             ]
 
         if subim is not None:
@@ -184,8 +185,11 @@ def generate_mbobs_for_detections(
                     _get_subobs(obs, x, y, start_x, start_y, end_x, end_y, box_size)
                 )
 
-        yield {
-            "id": ids[i] if ids is not None else i,
-            "x": x,
-            "y": y,
-        }, _mbobs
+        yield (
+            {
+                "id": ids[i] if ids is not None else i,
+                "x": x,
+                "y": y,
+            },
+            _mbobs,
+        )
