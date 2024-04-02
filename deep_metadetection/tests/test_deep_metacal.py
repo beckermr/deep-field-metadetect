@@ -9,10 +9,14 @@ from deep_metadetection.metacal import (
     metacal_wide_and_deep_psf_matched,
 )
 from deep_metadetection.utils import (
+    MAX_ABS_C,
+    MAX_ABS_M,
+    assert_m_c_ok,
     estimate_m_and_c,
     fit_gauss_mom,
     make_simple_sim,
     measure_mcal_shear_quants,
+    print_m_c,
 )
 
 
@@ -106,13 +110,8 @@ def test_deep_metacal(deep_psf_ratio):
         jackknife=len(res_p),
     )
 
-    print(f" m: {m / 1e-3: f} +/- {3 * merr / 1e-3: f} [1e-3, 3-sigma]", flush=True)
-    print(f"c1: {c1 / 1e-5: f} +/- {3 * c1err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
-    print(f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
-
-    assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
-    assert np.abs(c1) < max(4.0 * c1err, 1e-5), (c1, c1err)
-    assert np.abs(c2) < max(4.0 * c2err, 1e-5), (c2, c2err)
+    print_m_c(m, merr, c1, c1err, c2, c2err)
+    assert_m_c_ok(m, merr, c1, c1err, c2, c2err)
 
 
 def test_deep_metacal_widelows2n():
@@ -140,13 +139,8 @@ def test_deep_metacal_widelows2n():
         jackknife=len(res_p),
     )
 
-    print(f" m: {m / 1e-3: f} +/- {3 * merr / 1e-3: f} [1e-3, 3-sigma]", flush=True)
-    print(f"c1: {c1 / 1e-5: f} +/- {3 * c1err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
-    print(f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
-
-    assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
-    assert np.abs(c1) < max(4.0 * c1err, 1e-5), (c1, c1err)
-    assert np.abs(c2) < max(4.0 * c2err, 1e-5), (c2, c2err)
+    print_m_c(m, merr, c1, c1err, c2, c2err)
+    assert_m_c_ok(m, merr, c1, c1err, c2, c2err)
 
 
 @pytest.mark.slow
@@ -197,29 +191,24 @@ def test_deep_metacal_slow(skip_wide, skip_deep):  # pragma: no cover
         )
 
         print("# of sims:", len(res_p), flush=True)
-        print(f" m: {m / 1e-3: f} +/- {3 * merr / 1e-3: f} [1e-3, 3-sigma]", flush=True)
-        print(
-            f"c1: {c1 / 1e-5: f} +/- {3 * c1err / 1e-5: f} [1e-5, 3-sigma]", flush=True
-        )
-        print(
-            f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True
-        )
+        print_m_c(m, merr, c1, c1err, c2, c2err)
 
         if not skip_wide and not skip_deep:
-            assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
+            assert np.abs(m) < max(MAX_ABS_M, 3 * merr), (m, merr)
         elif 3 * merr < 5e-3:
-            assert np.abs(m) >= max(5e-4, 3 * merr), (m, merr)
-        assert np.abs(c1) < max(4.0 * c1err, 1e-5), (c1, c1err)
-        assert np.abs(c2) < max(4.0 * c2err, 1e-5), (c2, c2err)
+            assert np.abs(m) >= max(MAX_ABS_M, 3 * merr), (m, merr)
+        assert np.abs(c1) < max(4.0 * c1err, MAX_ABS_C), (c1, c1err)
+        assert np.abs(c2) < max(4.0 * c2err, MAX_ABS_C), (c2, c2err)
 
         loc += chunk_size
 
+    print_m_c(m, merr, c1, c1err, c2, c2err)
     if not skip_wide and not skip_deep:
-        assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
+        assert np.abs(m) < max(MAX_ABS_M, 3 * merr), (m, merr)
     else:
-        assert np.abs(m) >= max(5e-4, 3 * merr), (m, merr)
-    assert np.abs(c1) < max(4.0 * c1err, 1e-5), (c1, c1err)
-    assert np.abs(c2) < max(4.0 * c2err, 1e-5), (c2, c2err)
+        assert np.abs(m) >= max(MAX_ABS_M, 3 * merr), (m, merr)
+    assert np.abs(c1) < max(4.0 * c1err, MAX_ABS_C), (c1, c1err)
+    assert np.abs(c2) < max(4.0 * c2err, MAX_ABS_C), (c2, c2err)
 
 
 def _run_single_sim_maybe_mcal(

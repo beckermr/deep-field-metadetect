@@ -71,7 +71,7 @@ def run_detection_sep(
         detect_thresh = sxdes.DETECT_THRESH
 
     objs, seg = sxdes.run_sep(
-        image=detobs.image,
+        image=detobs.image.copy(),
         noise=1.0 / np.sqrt(np.median(detobs.weight[detobs.weight > 0])),
         mask=detobs.bmask & nodet_flags != 0 if detobs.has_bmask() else None,
         config=sep_config,

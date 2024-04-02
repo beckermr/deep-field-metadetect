@@ -2,7 +2,7 @@ import ngmix
 import numpy as np
 import pytest
 
-from deep_metadetection.detect import make_detection_coadd
+from deep_metadetection.detect import make_detection_coadd, run_detection_sep
 from deep_metadetection.utils import make_simple_sim
 
 
@@ -55,6 +55,25 @@ def test_make_detection_coadd(detbands, has_bmask):
 
     detobs = make_detection_coadd(tot_mbobs, detbands=detbands)
 
+    if False:
+        import proplot as pplt
+
+        fig, axs = pplt.subplots(
+            nrows=1, ncols=n_bands + 1, figsize=(3 * (n_bands + 1), 3)
+        )
+        for i in range(n_bands):
+            axs[i].imshow(
+                np.arcsinh(tot_mbobs[i][0].image * np.sqrt(tot_mbobs[i][0].weight))
+            )
+            axs[i].format(title=f"band {i}", grid=False)
+        i = n_bands
+        axs[i].imshow(np.arcsinh(detobs.image * np.sqrt(detobs.weight)))
+        axs[i].format(title="coadd", grid=False)
+        fig.show()
+        import pdb
+
+        pdb.set_trace()
+
     if detbands is None:
         detbands = [True] * n_bands
 
@@ -98,21 +117,67 @@ def test_make_detection_coadd(detbands, has_bmask):
     else:
         assert np.all(detobs.bmask == 0)
 
+
+def test_run_detection_sep():
+    obs, *_ = make_simple_sim(
+        seed=10,
+        obj_flux_factor=1,
+        s2n=100,
+        n_objs=10,
+        dim=100,
+        buff=20,
+    )
+
+    detdata = run_detection_sep(obs)
+    cat = detdata["catalog"]
+    assert cat.shape[0] > 0
+
+    for i, col in enumerate(["y", "x"]):
+        assert np.all(cat[col] >= 0), f"{col} {cat[col]} too small"
+        assert np.all(cat[col] <= obs.image.shape[i]), f"{col} {cat[col]} too big"
+
+    seg = detdata["segmap"]
+    assert np.all(seg >= 0)
+    assert np.max(seg) == cat.shape[0]
+
+
+def test_run_detection_sep_bmask():
+    obs, *_ = make_simple_sim(
+        seed=10,
+        obj_flux_factor=1,
+        s2n=100,
+        n_objs=10,
+        dim=100,
+        buff=20,
+    )
+
+    bmask = np.zeros_like(obs.image, dtype=np.int32)
+    bmask[:, 60:] = 2**1
+    bmask[:40, :] = 2**12
+    obs.bmask = bmask
+    detdata = run_detection_sep(obs, nodet_flags=2**1)
+    cat = detdata["catalog"]
+
     if False:
         import proplot as pplt
 
-        fig, axs = pplt.subplots(
-            nrows=1, ncols=n_bands + 1, figsize=(3 * (n_bands + 1), 3)
-        )
-        for i in range(n_bands):
-            axs[i].imshow(
-                np.arcsinh(tot_mbobs[i][0].image * np.sqrt(tot_mbobs[i][0].weight))
-            )
-            axs[i].format(title=f"band {i}", grid=False)
-        i = n_bands
-        axs[i].imshow(np.arcsinh(detobs.image * np.sqrt(detobs.weight)))
-        axs[i].format(title="coadd", grid=False)
+        fig, axs = pplt.subplots(nrows=1, ncols=1, figsize=(3, 3))
+        axs.imshow(np.arcsinh(obs.image * np.sqrt(obs.weight)))
+        axs.plot(cat["x"], cat["y"], "b.")
         fig.show()
         import pdb
 
         pdb.set_trace()
+
+    assert cat.shape[0] > 0
+
+    for i, col in enumerate(["y", "x"]):
+        assert np.all(cat[col] >= 0), f"{col} {cat[col]} too small"
+        assert np.all(cat[col] <= obs.image.shape[i]), f"{col} {cat[col]} too big"
+
+    assert np.all(cat["xpeak"] < 65)
+    assert np.any(cat["ypeak"] < 40)
+
+    seg = detdata["segmap"]
+    assert np.all(seg >= 0)
+    assert np.max(seg) == cat.shape[0]

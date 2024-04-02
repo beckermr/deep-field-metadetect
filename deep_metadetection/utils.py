@@ -10,6 +10,20 @@ from ngmix.gaussmom import GaussMom
 from deep_metadetection.metacal import DEFAULT_SHEARS
 
 GLOBAL_START_TIME = time.time()
+MAX_ABS_C = 1e-7
+MAX_ABS_M = 5e-4
+
+
+def assert_m_c_ok(m, merr, c1, c1err, c2, c2err):
+    assert np.abs(m) < max(MAX_ABS_M, 3 * merr), (m, merr)
+    assert np.abs(c1) < max(4.0 * c1err, MAX_ABS_C), (c1, c1err)
+    assert np.abs(c2) < max(4.0 * c2err, MAX_ABS_C), (c2, c2err)
+
+
+def print_m_c(m, merr, c1, c1err, c2, c2err):
+    print(f" m: {m / 1e-3: f} +/- {3 * merr / 1e-3: f} [1e-3, 3-sigma]", flush=True)
+    print(f"c1: {c1 / 1e-5: f} +/- {3 * c1err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
+    print(f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
 
 
 def get_measure_mcal_shear_quants_dtype(kind):
