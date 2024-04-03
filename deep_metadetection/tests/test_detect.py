@@ -189,7 +189,8 @@ def test_run_detection_sep_bmask():
 
 
 @pytest.mark.parametrize("has_bmask", [True, False])
-def test_generate_mbobs_for_detections(has_bmask):
+@pytest.mark.parametrize("has_psf", [True, False])
+def test_generate_mbobs_for_detections(has_bmask, has_psf):
     seed = 10
     rng = np.random.RandomState(seed)
 
@@ -223,6 +224,9 @@ def test_generate_mbobs_for_detections(has_bmask):
             assert np.any(obs.weight == 0)
 
             obs.mfrac = rng.uniform(0.0, 0.1, size=obs.image.shape)
+
+            if not has_psf:
+                obs.set_psf(None)
 
             obslist.append(obs)
 
@@ -284,6 +288,7 @@ def test_generate_mbobs_for_detections(has_bmask):
                             start_y : start_y + bs, start_x : start_x + bs
                         ],
                     )
+
                     if has_bmask:
                         assert np.array_equal(
                             obs.bmask,
@@ -293,15 +298,41 @@ def test_generate_mbobs_for_detections(has_bmask):
                         )
                     else:
                         assert np.all(obs.bmask == 0)
+
                     assert np.array_equal(
-                        obs.weight,
-                        tot_mbobs[band][obsind].weight[
+                        obs.noise,
+                        tot_mbobs[band][obsind].noise[
                             start_y : start_y + bs, start_x : start_x + bs
                         ],
                     )
+
                     assert np.array_equal(
                         obs.mfrac,
                         tot_mbobs[band][obsind].mfrac[
                             start_y : start_y + bs, start_x : start_x + bs
                         ],
                     )
+
+                    assert np.array_equal(
+                        obs.weight,
+                        tot_mbobs[band][obsind].weight[
+                            start_y : start_y + bs, start_x : start_x + bs
+                        ],
+                    )
+
+                    assert obs.has_psf() is has_psf
+
+                    assert (
+                        obs.jacobian.dudcol == tot_mbobs[band][obsind].jacobian.dudcol
+                    )
+                    assert (
+                        obs.jacobian.dudrow == tot_mbobs[band][obsind].jacobian.dudrow
+                    )
+                    assert (
+                        obs.jacobian.dvdcol == tot_mbobs[band][obsind].jacobian.dvdcol
+                    )
+                    assert (
+                        obs.jacobian.dvdrow == tot_mbobs[band][obsind].jacobian.dvdrow
+                    )
+                    assert obs.jacobian.col0 == x - start_x
+                    assert obs.jacobian.row0 == y - start_y
