@@ -10,6 +10,76 @@ from ngmix.gaussmom import GaussMom
 from deep_metadetection.metacal import DEFAULT_SHEARS
 
 GLOBAL_START_TIME = time.time()
+MAX_ABS_C = 1e-7
+MAX_ABS_M = 5e-4
+
+
+def assert_m_c_ok(m, merr, c1, c1err, c2, c2err):
+    assert np.abs(m) < max(MAX_ABS_M, 3 * merr), (m, merr)
+    assert np.abs(c1) < max(4.0 * c1err, MAX_ABS_C), (c1, c1err)
+    assert np.abs(c2) < max(4.0 * c2err, MAX_ABS_C), (c2, c2err)
+
+
+def print_m_c(m, merr, c1, c1err, c2, c2err):
+    print(f" m: {m / 1e-3: f} +/- {3 * merr / 1e-3: f} [1e-3, 3-sigma]", flush=True)
+    print(f"c1: {c1 / 1e-5: f} +/- {3 * c1err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
+    print(f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
+
+
+def canned_viz_for_obs(obs, x=None, y=None):  # pragma: no cover
+    import proplot as pplt
+
+    fig, axs = pplt.subplots(nrows=3, ncols=2, figsize=(6, 9), share=0)
+
+    nfac = np.sqrt(obs.weight)
+
+    axs[0, 0].imshow(
+        np.arcsinh(obs.image * nfac),
+        cmap="rocket",
+        origin="lower",
+    )
+    if x is not None and y is not None:
+        axs[0, 0].plot(x, y, "o", color="blue")
+    axs[0, 0].format(grid=False)
+
+    axs[0, 1].imshow(
+        np.arcsinh(obs.noise * nfac),
+        cmap="rocket",
+        origin="lower",
+    )
+    if x is not None and y is not None:
+        axs[0, 1].plot(x, y, "o", color="blue")
+    axs[0, 1].format(grid=False)
+
+    axs[1, 0].imshow(
+        obs.weight,
+        cmap="rocket",
+        origin="lower",
+    )
+    if x is not None and y is not None:
+        axs[1, 0].plot(x, y, "o", color="blue")
+    axs[1, 0].format(grid=False)
+
+    axs[1, 1].imshow(
+        obs.bmask,
+        cmap="rocket",
+        origin="lower",
+    )
+    if x is not None and y is not None:
+        axs[1, 1].plot(x, y, "o", color="blue")
+    axs[1, 1].format(grid=False)
+
+    axs[2, 0].imshow(
+        obs.mfrac,
+        cmap="rocket",
+        origin="lower",
+    )
+    if x is not None and y is not None:
+        axs[2, 0].plot(x, y, "o", color="blue")
+    axs[2, 0].format(grid=False)
+
+    axs[2, 1].set_visible(False)
+    return fig, axs
 
 
 def get_measure_mcal_shear_quants_dtype(kind):
@@ -302,15 +372,20 @@ def estimate_m_and_c(
         return _run_jackknife(presults, mresults, kind, step, g_true, jackknife)
 
 
-def _make_single_sim(*, rng, psf, obj, nse, dither, scale, dim):
+def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim):
     cen = (dim - 1) / 2
 
-    im = obj.drawImage(nx=dim, ny=dim, offset=dither, scale=scale).array
+    im = obj.drawImage(nx=dim, ny=dim, scale=scale).array
     im += rng.normal(size=im.shape, scale=nse)
 
     psf_im = psf.drawImage(nx=dim, ny=dim, scale=scale).array
 
-    jac = ngmix.DiagonalJacobian(scale=scale, row=cen + dither[1], col=cen + dither[0])
+    if dither is not None:
+        jac = ngmix.DiagonalJacobian(
+            scale=scale, row=cen + dither[1], col=cen + dither[0]
+        )
+    else:
+        jac = ngmix.DiagonalJacobian(scale=scale, row=cen, col=cen)
     psf_jac = ngmix.DiagonalJacobian(scale=scale, row=cen, col=cen)
 
     obs = ngmix.Observation(
@@ -322,6 +397,8 @@ def _make_single_sim(*, rng, psf, obj, nse, dither, scale, dim):
             jacobian=psf_jac,
         ),
         noise=rng.normal(size=im.shape, scale=nse),
+        bmask=np.zeros_like(im, dtype=np.int32),
+        mfrac=np.zeros_like(im),
     )
     return obs
 
@@ -329,13 +406,15 @@ def _make_single_sim(*, rng, psf, obj, nse, dither, scale, dim):
 def make_simple_sim(
     *,
     seed,
-    g1,
-    g2,
-    s2n,
-    deep_noise_fac,
-    deep_psf_fac,
+    g1=0,
+    g2=0,
+    s2n=20,
+    deep_noise_fac=1.0 / np.sqrt(10),
+    deep_psf_fac=1.0,
+    n_objs=1,
     scale=0.2,
     dim=53,
+    buff=0,
     obj_flux_factor=1,
 ):
     """Make a simple simulation for testing deep-field metadetection.
@@ -372,28 +451,40 @@ def make_simple_sim(
     """
     rng = np.random.RandomState(seed=seed)
 
-    gal = galsim.Exponential(half_light_radius=0.7).shear(g1=g1, g2=g2)
+    if n_objs > 1:
+        n_objs = rng.poisson(lam=n_objs)
+        xyrange = dim - buff * 2.0
+        shifts = rng.uniform(size=(n_objs, 2), low=-0.5, high=0.5) * xyrange * scale
+    else:
+        shifts = rng.uniform(size=(n_objs, 2), low=-0.5, high=0.5) * scale
+
+    gal = galsim.Exponential(half_light_radius=0.5).shear(g1=g1, g2=g2)
+    gals = None
+    for shift in shifts:
+        if gals is None:
+            gals = gal.shift(*shift)
+        else:
+            gals += gal.shift(*shift)
+
     psf = galsim.Moffat(beta=2.5, fwhm=0.8)
     deep_psf = galsim.Moffat(beta=2.5, fwhm=0.8 * deep_psf_fac)
-    obj = galsim.Convolve([gal, psf])
-    deep_obj = galsim.Convolve([gal, deep_psf])
+    objs = galsim.Convolve([gals, psf])
+    deep_objs = galsim.Convolve([gals, deep_psf])
 
     # estimate noise level
-    dither = np.zeros(2)
-    im = obj.drawImage(nx=dim, ny=dim, offset=dither, scale=scale).array
+    im = galsim.Convolve([gal, psf]).drawImage(nx=dim, ny=dim, scale=scale).array
     nse = np.sqrt(np.sum(im**2)) / s2n
 
     # apply the flux factor now that we have the noise level
-    obj *= obj_flux_factor
-    deep_obj *= obj_flux_factor
+    objs *= obj_flux_factor
+    deep_objs *= obj_flux_factor
 
-    dither = rng.uniform(size=2, low=-0.5, high=0.5)
     obs_wide = _make_single_sim(
         rng=rng,
         psf=psf,
-        obj=obj,
+        obj=objs,
         nse=nse,
-        dither=dither,
+        dither=shifts[0] / scale if n_objs == 1 else None,
         scale=scale,
         dim=dim,
     )
@@ -401,9 +492,9 @@ def make_simple_sim(
     obs_deep = _make_single_sim(
         rng=rng,
         psf=deep_psf,
-        obj=deep_obj,
+        obj=deep_objs,
         nse=nse * deep_noise_fac,
-        dither=dither,
+        dither=shifts[0] / scale if n_objs == 1 else None,
         scale=scale,
         dim=dim,
     )
@@ -411,9 +502,9 @@ def make_simple_sim(
     obs_deep_noise = _make_single_sim(
         rng=rng,
         psf=deep_psf,
-        obj=deep_obj * 0,
+        obj=deep_objs * 0,
         nse=nse * deep_noise_fac,
-        dither=dither,
+        dither=shifts[0] / scale if n_objs == 1 else None,
         scale=scale,
         dim=dim,
     )

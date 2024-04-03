@@ -6,10 +6,12 @@ import pytest
 
 from deep_metadetection.metacal import metacal_op_shears
 from deep_metadetection.utils import (
+    assert_m_c_ok,
     estimate_m_and_c,
     fit_gauss_mom,
     make_simple_sim,
     measure_mcal_shear_quants,
+    print_m_c,
 )
 
 
@@ -69,13 +71,8 @@ def test_metacal():
         jackknife=len(res_p),
     )
 
-    print(f" m: {m / 1e-3: f} +/- {3 * merr / 1e-3: f} [1e-3, 3-sigma]", flush=True)
-    print(f"c1: {c1 / 1e-5: f} +/- {3 * c1err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
-    print(f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
-
-    assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
-    assert np.abs(c1) < 4.0 * c1err, (c1, c1err)
-    assert np.abs(c2) < 4.0 * c2err, (c2, c2err)
+    print_m_c(m, merr, c1, c1err, c2, c2err)
+    assert_m_c_ok(m, merr, c1, c1err, c2, c2err)
 
 
 @pytest.mark.slow
@@ -112,16 +109,9 @@ def test_metacal_slow():  # pragma: no cover
         )
 
         print("# of sims:", len(res_p), flush=True)
-        print(f" m: {m / 1e-3: f} +/- {3 * merr / 1e-3: f} [1e-3, 3-sigma]", flush=True)
-        print(
-            f"c1: {c1 / 1e-5: f} +/- {3 * c1err / 1e-5: f} [1e-5, 3-sigma]", flush=True
-        )
-        print(
-            f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True
-        )
+        print_m_c(m, merr, c1, c1err, c2, c2err)
 
         loc += chunk_size
 
-    assert np.abs(m) < max(5e-4, 3 * merr), (m, merr)
-    assert np.abs(c1) < 4.0 * c1err, (c1, c1err)
-    assert np.abs(c2) < 4.0 * c2err, (c2, c2err)
+    print_m_c(m, merr, c1, c1err, c2, c2err)
+    assert_m_c_ok(m, merr, c1, c1err, c2, c2err)
