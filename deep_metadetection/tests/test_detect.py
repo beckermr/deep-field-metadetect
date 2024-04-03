@@ -61,7 +61,7 @@ def test_make_detection_coadd(detbands, has_bmask):
 
     detobs = make_detection_coadd(tot_mbobs, detbands=detbands)
 
-    if False:
+    if False:  # pragma: no cover
         import proplot as pplt
 
         fig, axs = pplt.subplots(
@@ -137,7 +137,7 @@ def test_run_detection_sep():
     detdata = run_detection_sep(obs)
     cat = detdata["catalog"]
 
-    if False:
+    if False:  # pragma: no cover
         fig, _ = canned_viz_for_obs(obs, x=cat["x"], y=cat["y"])
         fig.show()
         import pdb
@@ -172,7 +172,7 @@ def test_run_detection_sep_bmask():
     detdata = run_detection_sep(obs, nodet_flags=2**1)
     cat = detdata["catalog"]
 
-    if False:
+    if False:  # pragma: no cover
         fig, _ = canned_viz_for_obs(obs, x=cat["x"], y=cat["y"])
         fig.show()
         import pdb
@@ -240,12 +240,11 @@ def test_generate_mbobs_for_detections(has_bmask, has_psf):
     # this is for manual checking of the images
     use_real_det = False
 
-    if use_real_det:
+    if use_real_det:  # pragma: no cover
         detdata = run_detection_sep(obs, nodet_flags=2**1)
         cat = detdata["catalog"]
         xs = cat["x"]
         ys = cat["y"]
-
     else:
         xs = []
         ys = []
@@ -286,7 +285,7 @@ def test_generate_mbobs_for_detections(has_bmask, has_psf):
                 start_x = ix - bs_2 + 1
                 start_y = iy - bs_2 + 1
 
-                if use_real_det and band == 0 and obsind == 0:
+                if use_real_det and band == 0 and obsind == 0:  # pragma: no cover
                     fig, _ = canned_viz_for_obs(obs, x=x - start_x, y=y - start_y)
                     fig.show()
                     import pdb
