@@ -26,6 +26,62 @@ def print_m_c(m, merr, c1, c1err, c2, c2err):
     print(f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
 
 
+def canned_viz_for_obs(obs, x=None, y=None):
+    import proplot as pplt
+
+    fig, axs = pplt.subplots(nrows=3, ncols=2, figsize=(6, 9), share=0)
+
+    nfac = np.sqrt(obs.weight)
+
+    axs[0, 0].imshow(
+        np.arcsinh(obs.image * nfac),
+        cmap="rocket",
+        origin="lower",
+    )
+    if x is not None and y is not None:
+        axs[0, 0].plot(x, y, "o", color="blue")
+    axs[0, 0].format(grid=False)
+
+    axs[0, 1].imshow(
+        np.arcsinh(obs.noise * nfac),
+        cmap="rocket",
+        origin="lower",
+    )
+    if x is not None and y is not None:
+        axs[0, 1].plot(x, y, "o", color="blue")
+    axs[0, 1].format(grid=False)
+
+    axs[1, 0].imshow(
+        obs.weight,
+        cmap="rocket",
+        origin="lower",
+    )
+    if x is not None and y is not None:
+        axs[1, 0].plot(x, y, "o", color="blue")
+    axs[1, 0].format(grid=False)
+
+    axs[1, 1].imshow(
+        obs.bmask,
+        cmap="rocket",
+        origin="lower",
+    )
+    if x is not None and y is not None:
+        axs[1, 1].plot(x, y, "o", color="blue")
+    axs[1, 1].format(grid=False)
+
+    axs[2, 0].imshow(
+        obs.mfrac,
+        cmap="rocket",
+        origin="lower",
+    )
+    if x is not None and y is not None:
+        axs[2, 0].plot(x, y, "o", color="blue")
+    axs[2, 0].format(grid=False)
+
+    axs[2, 1].set_visible(False)
+    return fig, axs
+
+
 def get_measure_mcal_shear_quants_dtype(kind):
     return [
         (kind + "_tot_g1p", "f8"),

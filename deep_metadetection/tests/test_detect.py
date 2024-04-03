@@ -9,7 +9,7 @@ from deep_metadetection.detect import (
     make_detection_coadd,
     run_detection_sep,
 )
-from deep_metadetection.utils import make_simple_sim
+from deep_metadetection.utils import canned_viz_for_obs, make_simple_sim
 
 
 @pytest.mark.parametrize("has_bmask", [True, False])
@@ -136,6 +136,14 @@ def test_run_detection_sep():
 
     detdata = run_detection_sep(obs)
     cat = detdata["catalog"]
+
+    if False:
+        fig, _ = canned_viz_for_obs(obs, x=cat["x"], y=cat["y"])
+        fig.show()
+        import pdb
+
+        pdb.set_trace()
+
     assert cat.shape[0] > 0
 
     for i, col in enumerate(["y", "x"]):
@@ -165,11 +173,7 @@ def test_run_detection_sep_bmask():
     cat = detdata["catalog"]
 
     if False:
-        import proplot as pplt
-
-        fig, axs = pplt.subplots(nrows=1, ncols=1, figsize=(3, 3))
-        axs.imshow(np.arcsinh(obs.image * np.sqrt(obs.weight)))
-        axs.plot(cat["x"], cat["y"], "b.")
+        fig, _ = canned_viz_for_obs(obs, x=cat["x"], y=cat["y"])
         fig.show()
         import pdb
 
@@ -207,9 +211,9 @@ def test_generate_mbobs_for_detections(has_bmask, has_psf):
                 seed=seed,
                 obj_flux_factor=fluxes[band],
                 s2n=100,
-                n_objs=100,
+                n_objs=10,
                 dim=100,
-                buff=0,
+                buff=20,
             )
             if has_bmask:
                 obs.bmask = rng.choice(
@@ -233,24 +237,34 @@ def test_generate_mbobs_for_detections(has_bmask, has_psf):
 
         tot_mbobs.append(obslist)
 
-    xs = []
-    ys = []
-    for xv in [13, 50, 83]:
-        for yv in [11, 51, 81]:
-            xs.append(xv)
-            ys.append(yv)
-    xs = np.concatenate(
-        [
-            np.array(xs),
-            rng.uniform(0, 100, size=10),
-        ]
-    )
-    ys = np.concatenate(
-        [
-            np.array(ys),
-            rng.uniform(0, 100, size=10),
-        ]
-    )
+    # this is for manual checking of the images
+    use_real_det = False
+
+    if use_real_det:
+        detdata = run_detection_sep(obs, nodet_flags=2**1)
+        cat = detdata["catalog"]
+        xs = cat["x"]
+        ys = cat["y"]
+
+    else:
+        xs = []
+        ys = []
+        for xv in [13, 50, 83]:
+            for yv in [11, 51, 81]:
+                xs.append(xv)
+                ys.append(yv)
+        xs = np.concatenate(
+            [
+                np.array(xs),
+                rng.uniform(0, 100, size=10),
+            ]
+        )
+        ys = np.concatenate(
+            [
+                np.array(ys),
+                rng.uniform(0, 100, size=10),
+            ]
+        )
 
     bs = 32
     bs_2 = bs // 2
@@ -269,6 +283,16 @@ def test_generate_mbobs_for_detections(has_bmask, has_psf):
         for band, obsl in enumerate(_mbobs):
             assert len(obsl) == n_obs[band]
             for obsind, obs in enumerate(obsl):
+                start_x = ix - bs_2 + 1
+                start_y = iy - bs_2 + 1
+
+                if use_real_det and band == 0 and obsind == 0:
+                    fig, _ = canned_viz_for_obs(obs, x=x - start_x, y=y - start_y)
+                    fig.show()
+                    import pdb
+
+                    pdb.set_trace()
+
                 assert obs.image.shape == bshape
                 assert obs.bmask.shape == bshape
                 assert obs.weight.shape == bshape
@@ -281,8 +305,6 @@ def test_generate_mbobs_for_detections(has_bmask, has_psf):
                 assert obs.jacobian.dvdcol == tot_mbobs[band][obsind].jacobian.dvdcol
                 assert obs.jacobian.dvdrow == tot_mbobs[band][obsind].jacobian.dvdrow
 
-                start_x = ix - bs_2 + 1
-                start_y = iy - bs_2 + 1
                 assert obs.jacobian.col0 == x - start_x
                 assert obs.jacobian.row0 == y - start_y
 
