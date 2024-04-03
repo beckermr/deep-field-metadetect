@@ -26,7 +26,7 @@ def print_m_c(m, merr, c1, c1err, c2, c2err):
     print(f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
 
 
-def canned_viz_for_obs(obs, x=None, y=None):
+def canned_viz_for_obs(obs, x=None, y=None):  # pragma: no cover
     import proplot as pplt
 
     fig, axs = pplt.subplots(nrows=3, ncols=2, figsize=(6, 9), share=0)
