@@ -1,6 +1,7 @@
 import ngmix
 import numpy as np
 import pytest
+from numpy.testing import assert_array_equal
 
 from deep_metadetection.detect import (
     BMASK_EDGE,
@@ -273,66 +274,112 @@ def test_generate_mbobs_for_detections(has_bmask, has_psf):
                 assert obs.weight.shape == bshape
                 assert obs.mfrac.shape == bshape
 
+                assert obs.has_psf() is has_psf
+
+                assert obs.jacobian.dudcol == tot_mbobs[band][obsind].jacobian.dudcol
+                assert obs.jacobian.dudrow == tot_mbobs[band][obsind].jacobian.dudrow
+                assert obs.jacobian.dvdcol == tot_mbobs[band][obsind].jacobian.dvdcol
+                assert obs.jacobian.dvdrow == tot_mbobs[band][obsind].jacobian.dvdrow
+
+                start_x = ix - bs_2 + 1
+                start_y = iy - bs_2 + 1
+                assert obs.jacobian.col0 == x - start_x
+                assert obs.jacobian.row0 == y - start_y
+
+                sub_x = [None, None]
+                sub_y = [None, None]
+                orig_x = [None, None]
+                orig_y = [None, None]
                 if x <= bs_2 or x >= 100 - bs_2 or y <= bs_2 or y >= 100 - bs_2:
                     assert np.any(obs.bmask & BMASK_EDGE != 0)
                     assert np.any(obs.mfrac == 1.0)
+
+                    if start_x < 0:
+                        assert np.all(obs.bmask[:, :-start_x] & BMASK_EDGE != 0)
+                        assert np.all(obs.mfrac[:, :-start_x] == 1.0)
+                        sub_x[0] = -start_x
+                        orig_x[0] = 0
+                        sub_x[1] = bs
+                        orig_x[1] = start_x + bs
+
+                    if start_y < 0:
+                        assert np.all(obs.bmask[:-start_y, :] & BMASK_EDGE != 0)
+                        assert np.all(obs.mfrac[:-start_y, :] == 1.0)
+                        sub_y[0] = -start_y
+                        orig_y[0] = 0
+                        sub_y[1] = bs
+                        orig_y[1] = start_y + bs
+
+                    if start_x + bs > 100:
+                        end_x = start_x + bs - 100
+                        assert np.all(obs.bmask[:, -end_x:] & BMASK_EDGE != 0)
+                        assert np.all(obs.mfrac[:, -end_x:] == 1.0)
+                        sub_x[0] = 0
+                        orig_x[0] = start_x
+                        sub_x[1] = bs - end_x
+                        orig_x[1] = 100
+
+                    if start_y + bs > 100:
+                        end_y = start_y + bs - 100
+                        assert np.all(obs.bmask[-end_y:, :] & BMASK_EDGE != 0)
+                        assert np.all(obs.mfrac[-end_y:, :] == 1.0)
+                        sub_y[0] = 0
+                        orig_y[0] = start_y
+                        sub_y[1] = bs - end_y
+                        orig_y[1] = 100
+
                 else:
                     assert np.all(obs.bmask & BMASK_EDGE == 0)
                     assert np.all(obs.mfrac < 0.1)
 
-                    start_x = ix - bs_2 + 1
-                    start_y = iy - bs_2 + 1
+                if sub_x[0] is None:
+                    sub_x[0] = 0
+                    orig_x[0] = start_x
+                    sub_x[1] = bs
+                    orig_x[1] = start_x + bs
+
+                if sub_y[0] is None:
+                    sub_y[0] = 0
+                    orig_y[0] = start_y
+                    sub_y[1] = bs
+                    orig_y[1] = start_y + bs
+
+                assert_array_equal(
+                    obs.image[sub_y[0] : sub_y[1], sub_x[0] : sub_x[1]],
+                    tot_mbobs[band][obsind].image[
+                        orig_y[0] : orig_y[1], orig_x[0] : orig_x[1]
+                    ],
+                )
+
+                if has_bmask:
                     assert np.array_equal(
-                        obs.image,
-                        tot_mbobs[band][obsind].image[
-                            start_y : start_y + bs, start_x : start_x + bs
+                        obs.bmask[sub_y[0] : sub_y[1], sub_x[0] : sub_x[1]],
+                        tot_mbobs[band][obsind].bmask[
+                            orig_y[0] : orig_y[1], orig_x[0] : orig_x[1]
                         ],
                     )
-
-                    if has_bmask:
-                        assert np.array_equal(
-                            obs.bmask,
-                            tot_mbobs[band][obsind].bmask[
-                                start_y : start_y + bs, start_x : start_x + bs
-                            ],
-                        )
-                    else:
-                        assert np.all(obs.bmask == 0)
-
-                    assert np.array_equal(
-                        obs.noise,
-                        tot_mbobs[band][obsind].noise[
-                            start_y : start_y + bs, start_x : start_x + bs
-                        ],
+                else:
+                    assert np.all(
+                        obs.bmask[sub_y[0] : sub_y[1], sub_x[0] : sub_x[1]] == 0
                     )
 
-                    assert np.array_equal(
-                        obs.mfrac,
-                        tot_mbobs[band][obsind].mfrac[
-                            start_y : start_y + bs, start_x : start_x + bs
-                        ],
-                    )
+                assert np.array_equal(
+                    obs.noise[sub_y[0] : sub_y[1], sub_x[0] : sub_x[1]],
+                    tot_mbobs[band][obsind].noise[
+                        orig_y[0] : orig_y[1], orig_x[0] : orig_x[1]
+                    ],
+                )
 
-                    assert np.array_equal(
-                        obs.weight,
-                        tot_mbobs[band][obsind].weight[
-                            start_y : start_y + bs, start_x : start_x + bs
-                        ],
-                    )
+                assert np.array_equal(
+                    obs.mfrac[sub_y[0] : sub_y[1], sub_x[0] : sub_x[1]],
+                    tot_mbobs[band][obsind].mfrac[
+                        orig_y[0] : orig_y[1], orig_x[0] : orig_x[1]
+                    ],
+                )
 
-                    assert obs.has_psf() is has_psf
-
-                    assert (
-                        obs.jacobian.dudcol == tot_mbobs[band][obsind].jacobian.dudcol
-                    )
-                    assert (
-                        obs.jacobian.dudrow == tot_mbobs[band][obsind].jacobian.dudrow
-                    )
-                    assert (
-                        obs.jacobian.dvdcol == tot_mbobs[band][obsind].jacobian.dvdcol
-                    )
-                    assert (
-                        obs.jacobian.dvdrow == tot_mbobs[band][obsind].jacobian.dvdrow
-                    )
-                    assert obs.jacobian.col0 == x - start_x
-                    assert obs.jacobian.row0 == y - start_y
+                assert np.array_equal(
+                    obs.weight[sub_y[0] : sub_y[1], sub_x[0] : sub_x[1]],
+                    tot_mbobs[band][obsind].weight[
+                        orig_y[0] : orig_y[1], orig_x[0] : orig_x[1]
+                    ],
+                )
