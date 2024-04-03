@@ -117,7 +117,7 @@ def _get_subobs(obs, x, y, start_x, start_y, end_x, end_y, box_size):
     if obs.has_psf():
         kwargs["psf"] = obs.psf
 
-    for key in ["image", "bmask", "noise", "mfrac"]:
+    for key in ["image", "bmask", "noise", "mfrac", "weight"]:
         subim = None
         if key == "image":
             subim = np.zeros((box_size, box_size), dtype=obs.image.dtype)
@@ -139,12 +139,20 @@ def _get_subobs(obs, x, y, start_x, start_y, end_x, end_y, box_size):
                         orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]
                     ]
                 )
+            else:
+                subim[sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]] = 0
         elif key == "noise" and obs.has_noise():
             subim = np.zeros((box_size, box_size), dtype=obs.noise.dtype)
             subim += DEFAULT_IMAGE_VALUES[key]
             subim[sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]] = obs.noise[
                 orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]
             ]
+        elif key == "weight":
+            subim = np.zeros((box_size, box_size), dtype=obs.noise.dtype)
+            subim += DEFAULT_IMAGE_VALUES[key]
+            subim[sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]] = (
+                obs.weight[orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]]
+            )
         elif key == "mfrac" and obs.has_mfrac():
             subim = np.zeros((box_size, box_size), dtype=obs.mfrac.dtype)
             subim += DEFAULT_IMAGE_VALUES[key]
