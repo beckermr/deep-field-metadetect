@@ -8,6 +8,7 @@ platforms:
 dependencies:
   # run
   - python=3.11
+  - des-sxdes >=0.3.0
   - esutil
   - galsim
   - joblib
