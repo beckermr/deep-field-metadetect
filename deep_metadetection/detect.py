@@ -155,6 +155,9 @@ def _get_subobs(obs, x, y, start_x, start_y, end_x, end_y, box_size):
         if subim is not None:
             kwargs[key] = subim
 
+    msk = kwargs["bmask"] & BMASK_EDGE != 0
+    kwargs["mfrac"][msk] = 1.0
+
     return ngmix.Observation(**kwargs)
 
 

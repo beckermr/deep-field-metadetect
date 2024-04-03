@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 
 from deep_metadetection.detect import (
+    BMASK_EDGE,
     generate_mbobs_for_detections,
     make_detection_coadd,
     run_detection_sep,
@@ -187,7 +188,8 @@ def test_run_detection_sep_bmask():
     assert np.max(seg) == cat.shape[0]
 
 
-def test_generate_mbobs_for_detections_smoke():
+@pytest.mark.parametrize("has_bmask", [True, False])
+def test_generate_mbobs_for_detections(has_bmask):
     seed = 10
     rng = np.random.RandomState(seed)
 
@@ -207,17 +209,20 @@ def test_generate_mbobs_for_detections_smoke():
                 dim=100,
                 buff=0,
             )
-            obs.bmask = rng.choice(
-                [0, 2**0, 2**5], size=obs.image.shape, p=[0.8, 0.1, 0.1]
-            ).astype(np.int32)
-            assert np.any(obs.bmask != 0)
+            if has_bmask:
+                obs.bmask = rng.choice(
+                    [0, 2**0, 2**5], size=obs.image.shape, p=[0.8, 0.1, 0.1]
+                ).astype(np.int32)
+                assert np.any(obs.bmask != 0)
+            else:
+                obs.set_bmask(None)
 
             obs.weight = obs.weight * rng.choice(
                 [0, 1], size=obs.image.shape, p=[0.1, 0.9]
             )
             assert np.any(obs.weight == 0)
 
-            obs.mfrac = rng.uniform(0.9, 1.0, size=obs.image.shape)
+            obs.mfrac = rng.uniform(0.0, 0.1, size=obs.image.shape)
 
             obslist.append(obs)
 
@@ -243,18 +248,60 @@ def test_generate_mbobs_for_detections_smoke():
     )
 
     bs = 32
+    bs_2 = bs // 2
     bshape = (bs, bs)
     for obs_data, _mbobs in generate_mbobs_for_detections(
         tot_mbobs, xs, ys, box_size=bs
     ):
         i = obs_data["id"]
-        assert xs[i] == obs_data["x"]
-        assert ys[i] == obs_data["y"]
+        x = obs_data["x"]
+        y = obs_data["y"]
+        ix = int(x)
+        iy = int(y)
+        assert xs[i] == x
+        assert ys[i] == y
         assert len(_mbobs) == n_bands
-        for k, obsl in enumerate(_mbobs):
-            assert len(obsl) == n_obs[k]
-            for obs in obsl:
+        for band, obsl in enumerate(_mbobs):
+            assert len(obsl) == n_obs[band]
+            for obsind, obs in enumerate(obsl):
                 assert obs.image.shape == bshape
                 assert obs.bmask.shape == bshape
                 assert obs.weight.shape == bshape
                 assert obs.mfrac.shape == bshape
+
+                if x <= bs_2 or x >= 100 - bs_2 or y <= bs_2 or y >= 100 - bs_2:
+                    assert np.any(obs.bmask & BMASK_EDGE != 0)
+                    assert np.any(obs.mfrac == 1.0)
+                else:
+                    assert np.all(obs.bmask & BMASK_EDGE == 0)
+                    assert np.all(obs.mfrac < 0.1)
+
+                    start_x = ix - bs_2 + 1
+                    start_y = iy - bs_2 + 1
+                    assert np.array_equal(
+                        obs.image,
+                        tot_mbobs[band][obsind].image[
+                            start_y : start_y + bs, start_x : start_x + bs
+                        ],
+                    )
+                    if has_bmask:
+                        assert np.array_equal(
+                            obs.bmask,
+                            tot_mbobs[band][obsind].bmask[
+                                start_y : start_y + bs, start_x : start_x + bs
+                            ],
+                        )
+                    else:
+                        assert np.all(obs.bmask == 0)
+                    assert np.array_equal(
+                        obs.weight,
+                        tot_mbobs[band][obsind].weight[
+                            start_y : start_y + bs, start_x : start_x + bs
+                        ],
+                    )
+                    assert np.array_equal(
+                        obs.mfrac,
+                        tot_mbobs[band][obsind].mfrac[
+                            start_y : start_y + bs, start_x : start_x + bs
+                        ],
+                    )
