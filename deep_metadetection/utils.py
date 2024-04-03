@@ -15,18 +15,54 @@ MAX_ABS_M = 5e-4
 
 
 def assert_m_c_ok(m, merr, c1, c1err, c2, c2err):
+    """Assert that the m and c values are within reasonable bounds.
+
+    The test asserts that:
+
+      * The multiplicative bias is less than 3 times the error
+        or 5e-4, whichever is larger.
+      * The additive biases are less than 4 times the error or 1e-7,
+        whichever is larger.
+
+    Parameters
+    ----------
+    m : float
+        The multiplicative bias.
+    merr : float
+        The error in the multiplicative bias.
+    c1 : float
+        The first additive bias.
+    c1err : float
+        The error in the first additive bias.
+    c2 : float
+        The second additive bias.
+    c2err : float
+        The error in the second additive bias.
+    """
     assert np.abs(m) < max(MAX_ABS_M, 3 * merr), (m, merr)
     assert np.abs(c1) < max(4.0 * c1err, MAX_ABS_C), (c1, c1err)
     assert np.abs(c2) < max(4.0 * c2err, MAX_ABS_C), (c2, c2err)
 
 
 def print_m_c(m, merr, c1, c1err, c2, c2err):
+    """Print the m and c values with errors."""
     print(f" m: {m / 1e-3: f} +/- {3 * merr / 1e-3: f} [1e-3, 3-sigma]", flush=True)
     print(f"c1: {c1 / 1e-5: f} +/- {3 * c1err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
     print(f"c2: {c2 / 1e-5: f} +/- {3 * c2err / 1e-5: f} [1e-5, 3-sigma]", flush=True)
 
 
 def canned_viz_for_obs(obs, x=None, y=None):  # pragma: no cover
+    """Make a canned visualization for an observation using proplot.
+
+    Parameters
+    ----------
+    obs : ngmix.Observation
+        The observation to visualize.
+    x : float, optional
+        The x-coordinate of the object to mark. If None, no object is marked.
+    y : float, optional
+        The y-coordinate of the object to mark. If None, no object is marked.
+    """
     import proplot as pplt
 
     fig, axs = pplt.subplots(nrows=3, ncols=2, figsize=(6, 9), share=0)
@@ -83,6 +119,7 @@ def canned_viz_for_obs(obs, x=None, y=None):  # pragma: no cover
 
 
 def get_measure_mcal_shear_quants_dtype(kind):
+    """Get the dtype for the metacal shear results as a list of tuples."""
     return [
         (kind + "_tot_g1p", "f8"),
         (kind + "_tot_g1m", "f8"),
@@ -217,6 +254,20 @@ def fit_gauss_mom(mcal_res, fwhm=1.2):
 
 @contextmanager
 def timer(name, silent=False):
+    """A simple timer context manager.
+
+    Exmaple usage:
+
+    >>> with timer("sleeping"):
+    ...     time.sleep(1)
+
+    Parameters
+    ----------
+    name : str
+        The name of the timer to print.
+    silent : bool, optional
+        If True, do not print to stderr/stdout.
+    """
     t0 = time.time()
     if not silent:
         print(

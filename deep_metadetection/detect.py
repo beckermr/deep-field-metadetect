@@ -14,6 +14,27 @@ DEFAULT_IMAGE_VALUES = {
 
 
 def make_detection_coadd(mbobs, detbands=None):
+    """Make a coadd of the images in the detection bands.
+
+    The coadd is inverse variance weighted by the
+    median of the weight map for the image.
+
+    This method assumes the WCS Jacobian is the same for all
+    images in the mbobs.
+
+    Parameters
+    ----------
+    mbobs : ngmix.MultiBandObsList
+        The multi-band observations from which to form the detection coadd.
+    detbands : list of bool, optional
+        A list of booleans indicating which bands to use for
+        the detection coadd. If None, all bands are used.
+
+    Returns
+    -------
+    detobs : ngmix.Observation
+        The detection coadd in an ngmix.Observation.
+    """
     detim = np.zeros_like(mbobs[0][0].image)
     detvar = np.zeros_like(mbobs[0][0].image)
     mask = np.zeros(detim.shape, dtype=np.int32)
@@ -65,6 +86,30 @@ def run_detection_sep(
     detect_thresh=None,
     nodet_flags=0,
 ):
+    """Run SEP on an ngmix.Observation to detect objects.
+
+    Parameters
+    ----------
+    detobs : ngmix.Observation
+        The observation to run SEP on.
+    sep_config : dict, optional
+        The SEP configuration dictionary. If None, the default SEP
+        configuration is used from `sxdes`.
+    detect_thresh : float, optional
+        The detection threshold for SEP. If None, the default
+        detection threshold is used from `sxdes`.
+    nodet_flags : int, optional
+        The bitmask flags to mark regions where detection is not
+        done. If None, no flags are used.
+
+    Returns
+    -------
+    dict
+        A dictionary containing the following keys:
+
+          - "catalog" : The object catalog from SEP.
+          - "segmap" : The segmentation map from SEP.
+    """
     if sep_config is None:
         sep_config = sxdes.SX_CONFIG
     if detect_thresh is None:
@@ -176,6 +221,26 @@ def generate_mbobs_for_detections(
     box_size=48,
     ids=None,
 ):
+    """Generate sub-mbobs around the given positions of objects.
+
+    This routine is a generator and so should be used like thus:
+
+    >>> for obj, _mbobs in generate_mbobs_for_detections(mbobs, xs, ys):
+    ...     # do something with obj and _mbobs
+
+    Parameters
+    ----------
+    mbobs : ngmix.MultiBandObsList
+        The multi-band observations to generate sub-mbobs from.
+    xs : list or array-like
+        The x positions of the objects.
+    ys : list or array-like
+        The y positions of the objects.
+    box_size : int, optional
+        The size of the sub-boxes around the objects. Default is 48.
+    ids : list or array-like, optional
+        The IDs of the objects. If None, the IDs are the indices of the positions.
+    """
     half_box_size = box_size // 2
 
     for i, (x, y) in enumerate(zip(xs, ys)):
