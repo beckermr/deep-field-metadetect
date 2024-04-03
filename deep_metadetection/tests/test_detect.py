@@ -2,7 +2,11 @@ import ngmix
 import numpy as np
 import pytest
 
-from deep_metadetection.detect import make_detection_coadd, run_detection_sep
+from deep_metadetection.detect import (
+    generate_mbobs_for_detections,
+    make_detection_coadd,
+    run_detection_sep,
+)
 from deep_metadetection.utils import make_simple_sim
 
 
@@ -181,3 +185,76 @@ def test_run_detection_sep_bmask():
     seg = detdata["segmap"]
     assert np.all(seg >= 0)
     assert np.max(seg) == cat.shape[0]
+
+
+def test_generate_mbobs_for_detections_smoke():
+    seed = 10
+    rng = np.random.RandomState(seed)
+
+    n_bands = 3
+    fluxes = rng.uniform(0.2, 1, size=n_bands)
+    n_obs = rng.randint(1, 3, size=3)
+
+    tot_mbobs = ngmix.MultiBandObsList()
+    for band in range(n_bands):
+        obslist = ngmix.ObsList()
+        for i in range(n_obs[band]):
+            obs, *_ = make_simple_sim(
+                seed=seed,
+                obj_flux_factor=fluxes[band],
+                s2n=100,
+                n_objs=100,
+                dim=100,
+                buff=0,
+            )
+            obs.bmask = rng.choice(
+                [0, 2**0, 2**5], size=obs.image.shape, p=[0.8, 0.1, 0.1]
+            ).astype(np.int32)
+            assert np.any(obs.bmask != 0)
+
+            obs.weight = obs.weight * rng.choice(
+                [0, 1], size=obs.image.shape, p=[0.1, 0.9]
+            )
+            assert np.any(obs.weight == 0)
+
+            obs.mfrac = rng.uniform(0.9, 1.0, size=obs.image.shape)
+
+            obslist.append(obs)
+
+        tot_mbobs.append(obslist)
+
+    xs = []
+    ys = []
+    for xv in [13, 50, 83]:
+        for yv in [11, 51, 81]:
+            xs.append(xv)
+            ys.append(yv)
+    xs = np.concatenate(
+        [
+            np.array(xs),
+            rng.uniform(0, 100, size=10),
+        ]
+    )
+    ys = np.concatenate(
+        [
+            np.array(ys),
+            rng.uniform(0, 100, size=10),
+        ]
+    )
+
+    bs = 32
+    bshape = (bs, bs)
+    for obs_data, _mbobs in generate_mbobs_for_detections(
+        tot_mbobs, xs, ys, box_size=bs
+    ):
+        i = obs_data["id"]
+        assert xs[i] == obs_data["x"]
+        assert ys[i] == obs_data["y"]
+        assert len(_mbobs) == n_bands
+        for k, obsl in enumerate(_mbobs):
+            assert len(obsl) == n_obs[k]
+            for obs in obsl:
+                assert obs.image.shape == bshape
+                assert obs.bmask.shape == bshape
+                assert obs.weight.shape == bshape
+                assert obs.mfrac.shape == bshape
