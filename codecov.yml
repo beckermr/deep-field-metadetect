@@ -21,11 +21,11 @@ coverage:
         if_not_found: success
         if_ci_failed: failure
         paths:
-          - "!deep_metadetection/tests/*"
-          - "deep_metadetection/*"
+          - "!deep_field_metadetect/tests/*"
+          - "deep_field_metadetect/*"
 
       tests:
         target: 95.0%
         paths:
-          - "deep_metadetection/tests/*"
-          - "!deep_metadetection/*"
+          - "deep_field_metadetect/tests/*"
+          - "!deep_field_metadetect/*"

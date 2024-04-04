@@ -35,24 +35,24 @@ jobs:
 
       - name: test versions
         run: |
-          pip uninstall deep-metadetection --yes
+          pip uninstall deep-field-metadetect --yes
           [[ $(python setup.py --version) != "0.0.0" ]] || exit 1
 
           rm -rf dist/*
           python setup.py sdist
           pip install -vv --no-deps --no-build-isolation dist/*.tar.gz
           cd ..
-          python -c "import deep_metadetection; assert deep_metadetection.__version__ != '0.0.0'"
+          python -c "import deep_field_metadetect; assert deep_field_metadetect.__version__ != '0.0.0'"
           cd -
-          pip uninstall deep-metadetection --yes
+          pip uninstall deep-field-metadetect --yes
 
           rm -rf dist/*
           python -m build --sdist . --outdir dist
           pip install --no-deps --no-build-isolation dist/*.tar.gz
           cd ..
-          python -c "import deep_metadetection; assert deep_metadetection.__version__ != '0.0.0'"
+          python -c "import deep_field_metadetect; assert deep_field_metadetect.__version__ != '0.0.0'"
           cd -
-          pip uninstall deep-metadetection --yes
+          pip uninstall deep-field-metadetect --yes
 
           python -m pip install -v --no-deps --no-build-isolation -e .
 
@@ -60,13 +60,13 @@ jobs:
         run: |
           pytest \
             -v \
-            --cov=deep_metadetection \
+            --cov=deep_field_metadetect \
             --cov=tests \
             --cov-config=.coveragerc \
             --cov-report=xml \
             --cov-report=term-missing \
             --durations 10 \
-            deep_metadetection
+            deep_field_metadetect
 
       - name: upload codecov
         uses: codecov/codecov-action@v4

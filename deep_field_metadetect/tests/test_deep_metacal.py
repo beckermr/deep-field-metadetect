@@ -4,11 +4,11 @@ import joblib
 import numpy as np
 import pytest
 
-from deep_metadetection.metacal import (
+from deep_field_metadetect.metacal import (
     metacal_op_shears,
     metacal_wide_and_deep_psf_matched,
 )
-from deep_metadetection.utils import (
+from deep_field_metadetect.utils import (
     MAX_ABS_C,
     MAX_ABS_M,
     assert_m_c_ok,

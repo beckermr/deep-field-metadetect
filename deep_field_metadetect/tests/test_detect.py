@@ -3,13 +3,13 @@ import numpy as np
 import pytest
 from numpy.testing import assert_array_equal
 
-from deep_metadetection.detect import (
+from deep_field_metadetect.detect import (
     BMASK_EDGE,
     generate_mbobs_for_detections,
     make_detection_coadd,
     run_detection_sep,
 )
-from deep_metadetection.utils import canned_viz_for_obs, make_simple_sim
+from deep_field_metadetect.utils import canned_viz_for_obs, make_simple_sim
 
 
 @pytest.mark.parametrize("has_bmask", [True, False])
