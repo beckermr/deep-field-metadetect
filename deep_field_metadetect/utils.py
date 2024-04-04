@@ -191,12 +191,11 @@ def measure_mcal_shear_quants(data, kind="wmom", s2n_cut=10, t_ratio_cut=1.2):
     return res
 
 
-def _fill_nan(vals, i, no_psf=False):
+def _fill_nan(vals, i):
     vals["wmom_g1"][i] = np.nan
     vals["wmom_g2"][i] = np.nan
     vals["wmom_T_ratio"][i] = np.nan
-    if not no_psf:
-        vals["wmom_psf_T"][i] = np.nan
+    vals["wmom_psf_T"][i] = np.nan
     vals["wmom_s2n"][i] = np.nan
 
 
