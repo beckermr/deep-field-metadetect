@@ -13,7 +13,7 @@ from deep_field_metadetect.utils import (
     MAX_ABS_M,
     assert_m_c_ok,
     estimate_m_and_c,
-    fit_gauss_mom,
+    fit_gauss_mom_mcal_res,
     make_simple_sim,
     measure_mcal_shear_quants,
     print_m_c,
@@ -45,7 +45,7 @@ def _run_single_sim(
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
     )
-    res = fit_gauss_mom(mcal_res)
+    res = fit_gauss_mom_mcal_res(mcal_res)
     return measure_mcal_shear_quants(res)
 
 
@@ -240,7 +240,7 @@ def _run_single_sim_maybe_mcal(
             obs_d,
             obs_dn,
         )
-    return fit_gauss_mom(mcal_res), mcal_res
+    return fit_gauss_mom_mcal_res(mcal_res), mcal_res
 
 
 def test_deep_metacal_noise_object_s2n():
