@@ -21,7 +21,11 @@ def _simple_noise_sim(seed):
     )
 
     mcal_res = metacal_wide_and_deep_psf_matched(
-        obs_wide, obs_deep, obs_deep_noise, shears=["noshear"]
+        obs_wide,
+        obs_deep,
+        obs_deep_noise,
+        shears=["noshear"],
+        return_noshear_deep=True,
     )
 
     mwide_mcal = metacal_op_g1g2(obs_wide, mcal_res["noshear"].psf.galsim_obj, 0, 0)

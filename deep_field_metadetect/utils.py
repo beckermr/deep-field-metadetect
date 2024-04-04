@@ -308,18 +308,20 @@ def fit_gauss_mom_mcal_res(mcal_res, fwhm=1.2):
             _fill_nan(vals, i)
             continue
 
+        vals["wmom_psf_T"][i] = psf_res["T"]
+
         res = fitter.go(obs)
         vals["wmom_flags"][i] = res["flags"]
 
         if res["flags"] != 0:
             _fill_nan(vals, i)
+            vals["wmom_psf_T"][i] = psf_res["T"]
             continue
 
         vals["wmom_g1"][i] = res["e"][0]
         vals["wmom_g2"][i] = res["e"][1]
         vals["wmom_T_ratio"][i] = res["T"] / psf_res["T"]
         vals["wmom_s2n"][i] = res["s2n"]
-        vals["wmom_psf_T"][i] = psf_res["T"]
 
     return vals
 
