@@ -1,12 +1,12 @@
 import numpy as np
 from esutil.pbar import PBar
 
-from deep_metadetection.metacal import (
+from deep_field_metadetect.metacal import (
     metacal_op_g1g2,
     metacal_wide_and_deep_psf_matched,
 )
-from deep_metadetection.pixel_cov import meas_pixel_cov
-from deep_metadetection.utils import make_simple_sim
+from deep_field_metadetect.pixel_cov import meas_pixel_cov
+from deep_field_metadetect.utils import make_simple_sim
 
 
 def _simple_noise_sim(seed):

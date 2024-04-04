@@ -160,4 +160,4 @@ cython_debug/
 #.idea/
 
 # version stuff
-deep_metadetection/_version.py
+deep_field_metadetect/_version.py

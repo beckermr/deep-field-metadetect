@@ -1,6 +1,6 @@
 [run]
 source =
-    deep_metadetection
+    deep_field_metadetect
 
 [report]
 omit =

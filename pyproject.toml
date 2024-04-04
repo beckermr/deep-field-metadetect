@@ -7,7 +7,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "deep-metadetection"
+name = "deep-field-metadetect"
 authors = [
     {name = "Matthew R. Becker", email = "mrbecker@anl.gov"},
 ]
@@ -17,7 +17,7 @@ license = {file = "LICENSE"}
 readme = "README.md"
 
 [project.urls]
-home = "https://github.com/beckermr/deep-metadetection"
+home = "https://github.com/beckermr/deep-field-metadetect"
 
 [tool.setuptools]
 include-package-data = true
@@ -25,7 +25,7 @@ zip-safe = false
 packages = {find = {exclude=["tests*"]}}
 
 [tool.setuptools_scm]
-write_to = "deep_metadetection/_version.py"
+write_to = "deep_field_metadetect/_version.py"
 write_to_template = "__version__ = '{version}'\n"
 
 [tool.black]

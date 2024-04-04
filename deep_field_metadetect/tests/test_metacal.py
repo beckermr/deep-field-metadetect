@@ -4,8 +4,8 @@ import joblib
 import numpy as np
 import pytest
 
-from deep_metadetection.metacal import metacal_op_shears
-from deep_metadetection.utils import (
+from deep_field_metadetect.metacal import metacal_op_shears
+from deep_field_metadetect.utils import (
     assert_m_c_ok,
     estimate_m_and_c,
     fit_gauss_mom,

@@ -1,2 +1,2 @@
-include deep_metadetection/_version.py
+include deep_field_metadetect/_version.py
 include LICENSE

@@ -2,7 +2,7 @@ import galsim
 import numpy as np
 import pytest
 
-from deep_metadetection.pixel_cov import meas_pixel_cov
+from deep_field_metadetect.pixel_cov import meas_pixel_cov
 
 
 def test_meas_pixel_cov_gauss():
