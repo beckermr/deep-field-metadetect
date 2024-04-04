@@ -11,6 +11,7 @@ dependencies:
   - des-sxdes >=0.3.0
   - esutil
   - galsim
+  - hexalattice
   - joblib
   - ngmix
   - numba

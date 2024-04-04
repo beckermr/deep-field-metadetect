@@ -496,13 +496,59 @@ def estimate_m_and_c(
         return _run_jackknife(presults, mresults, kind, step, g_true, jackknife)
 
 
+def _gen_hex_grid(*, rng, dim, buff, pixel_scale, n_tot):
+    """
+    I ripped this out of descwl-shear-sims.
+    """
+    from hexalattice.hexalattice import create_hex_grid
+
+    width = (dim - 2 * buff) * pixel_scale
+    spacing = width / np.sqrt(n_tot)
+    n_on_side = int(width / spacing) + 1
+
+    nx = int(n_on_side * np.sqrt(2))
+    # the factor of 0.866 makes sure the grid is square-ish
+    ny = int(n_on_side * np.sqrt(2) / 0.8660254)
+
+    # here the spacing between grid centers is 1
+    hg, _ = create_hex_grid(nx=nx, ny=ny, rotate_deg=rng.uniform() * 360)
+
+    # convert the spacing to right number of pixels
+    # we also recenter the grid since it comes out centered at 0,0
+    hg *= spacing
+    upos = hg[:, 0].ravel()
+    vpos = hg[:, 1].ravel()
+
+    # dither
+    upos += pixel_scale * rng.uniform(low=-0.5, high=0.5, size=upos.shape[0])
+    vpos += pixel_scale * rng.uniform(low=-0.5, high=0.5, size=vpos.shape[0])
+
+    pos_bounds = (-width / 2, width / 2)
+    msk = (
+        (upos >= pos_bounds[0])
+        & (upos <= pos_bounds[1])
+        & (vpos >= pos_bounds[0])
+        & (vpos <= pos_bounds[1])
+    )
+    upos = upos[msk]
+    vpos = vpos[msk]
+
+    ntot = upos.shape[0]
+    shifts = np.zeros(ntot, dtype=[("dx", "f8"), ("dy", "f8")])
+    shifts["dx"] = upos
+    shifts["dy"] = vpos
+
+    return shifts
+
+
 def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim):
     cen = (dim - 1) / 2
 
     im = obj.drawImage(nx=dim, ny=dim, scale=scale).array
     im += rng.normal(size=im.shape, scale=nse)
 
-    psf_im = psf.drawImage(nx=dim, ny=dim, scale=scale).array
+    cen_psf = (53 - 1) / 2
+    psf_im = psf.drawImage(nx=53, ny=53, scale=scale).array
 
     if dither is not None:
         jac = ngmix.DiagonalJacobian(
@@ -510,7 +556,7 @@ def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim):
         )
     else:
         jac = ngmix.DiagonalJacobian(scale=scale, row=cen, col=cen)
-    psf_jac = ngmix.DiagonalJacobian(scale=scale, row=cen, col=cen)
+    psf_jac = ngmix.DiagonalJacobian(scale=scale, row=cen_psf, col=cen_psf)
 
     obs = ngmix.Observation(
         image=im,
@@ -538,7 +584,7 @@ def make_simple_sim(
     n_objs=1,
     scale=0.2,
     dim=53,
-    buff=0,
+    buff=26,
     obj_flux_factor=1,
 ):
     """Make a simple simulation for testing deep-field metadetection.
@@ -576,11 +622,24 @@ def make_simple_sim(
     rng = np.random.RandomState(seed=seed)
 
     if n_objs > 1:
-        n_objs = rng.poisson(lam=n_objs)
-        xyrange = dim - buff * 2.0
-        shifts = rng.uniform(size=(n_objs, 2), low=-0.5, high=0.5) * xyrange * scale
+        _n_objs = max(1, rng.poisson(lam=n_objs))
     else:
-        shifts = rng.uniform(size=(n_objs, 2), low=-0.5, high=0.5) * scale
+        _n_objs = n_objs
+
+    if n_objs > 1:
+        shifts = _gen_hex_grid(
+            rng=rng,
+            dim=dim,
+            buff=buff,
+            pixel_scale=scale,
+            n_tot=_n_objs,
+        )
+        shifts = np.vstack([shifts["dx"], shifts["dy"]]).T
+    else:
+        xyrange = dim - buff * 2.0
+        shifts = rng.uniform(size=(_n_objs, 2), low=-0.5, high=0.5) * xyrange * scale
+
+    n_objs = _n_objs
 
     gal = galsim.Exponential(half_light_radius=0.5).shear(g1=g1, g2=g2)
     gals = None
