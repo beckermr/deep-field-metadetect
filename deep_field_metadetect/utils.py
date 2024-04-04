@@ -7,7 +7,7 @@ import ngmix
 import numpy as np
 from ngmix.gaussmom import GaussMom
 
-from deep_metadetection.metacal import DEFAULT_SHEARS
+from deep_field_metadetect.metacal import DEFAULT_SHEARS
 
 GLOBAL_START_TIME = time.time()
 MAX_ABS_C = 1e-7

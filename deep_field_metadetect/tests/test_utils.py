@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from deep_metadetection.utils import (
+from deep_field_metadetect.utils import (
     estimate_m_and_c,
     get_measure_mcal_shear_quants_dtype,
 )
