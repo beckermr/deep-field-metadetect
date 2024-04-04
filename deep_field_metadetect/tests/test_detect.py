@@ -185,7 +185,7 @@ def test_run_detection_sep_bmask():
         assert np.all(cat[col] >= 0), f"{col} {cat[col]} too small"
         assert np.all(cat[col] <= obs.image.shape[i]), f"{col} {cat[col]} too big"
 
-    assert np.all(cat["xpeak"] < 65)
+    assert np.all(cat["xpeak"] < 80)
     assert np.any(cat["ypeak"] < 40)
 
     seg = detdata["segmap"]

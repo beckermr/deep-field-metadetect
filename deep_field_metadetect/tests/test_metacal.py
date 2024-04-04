@@ -8,7 +8,7 @@ from deep_field_metadetect.metacal import metacal_op_shears
 from deep_field_metadetect.utils import (
     assert_m_c_ok,
     estimate_m_and_c,
-    fit_gauss_mom,
+    fit_gauss_mom_mcal_res,
     make_simple_sim,
     measure_mcal_shear_quants,
     print_m_c,
@@ -25,7 +25,7 @@ def _run_single_sim_pair(seed, s2n):
         deep_psf_fac=1.0,
     )
     mcal_res = metacal_op_shears(obs_plus)
-    res_p = fit_gauss_mom(mcal_res)
+    res_p = fit_gauss_mom_mcal_res(mcal_res)
     res_p = measure_mcal_shear_quants(res_p)
 
     obs_minus, *_ = make_simple_sim(
@@ -37,7 +37,7 @@ def _run_single_sim_pair(seed, s2n):
         deep_psf_fac=1.0,
     )
     mcal_res = metacal_op_shears(obs_minus)
-    res_m = fit_gauss_mom(mcal_res)
+    res_m = fit_gauss_mom_mcal_res(mcal_res)
     res_m = measure_mcal_shear_quants(res_m)
 
     return res_p, res_m
