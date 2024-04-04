@@ -191,16 +191,88 @@ def measure_mcal_shear_quants(data, kind="wmom", s2n_cut=10, t_ratio_cut=1.2):
     return res
 
 
-def _fill_nan(vals, i):
+def _fill_nan(vals, i, no_psf=False):
     vals["wmom_g1"][i] = np.nan
     vals["wmom_g2"][i] = np.nan
     vals["wmom_T_ratio"][i] = np.nan
-    vals["wmom_psf_T"][i] = np.nan
+    if not no_psf:
+        vals["wmom_psf_T"][i] = np.nan
     vals["wmom_s2n"][i] = np.nan
 
 
-def fit_gauss_mom(mcal_res, fwhm=1.2):
-    """Fit a m{cal/det} result dict using Gaussian moments.
+def fit_gauss_mom_obs(obs, fwhm=1.2):
+    """Fit an ngmix.Observation with Gaussian moments.
+
+    Parameters
+    ----------
+    obs : ngmix.Observation
+        The observation to fit.
+    fwhm : float, optional
+        The FWHM of the Gaussian to use in the fit. Default is 1.2.
+
+    Returns
+    -------
+    res: dict-like
+        The fit results.
+    """
+    fitter = GaussMom(fwhm)
+    return fitter.go(obs)
+
+
+def fit_gauss_mom_obs_and_psf(obs, fwhm=1.2, psf_res=None):
+    """Fit an ngmix.Observation with Gaussian moments.
+
+    Parameters
+    ----------
+    obs : ngmix.Observation
+        The observation to fit.
+    fwhm : float, optional
+        The FWHM of the Gaussian to use in the fit. Default is 1.2.
+    psf_res : dict, optional
+        The PSF result dict. If None, the PSF is fit. Default is None.
+
+    Returns
+    -------
+    data : array
+        The fit results
+    """
+    dt = [
+        ("wmom_flags", "i4"),
+        ("wmom_g1", "f8"),
+        ("wmom_g2", "f8"),
+        ("wmom_T_ratio", "f8"),
+        ("wmom_psf_T", "f8"),
+        ("wmom_s2n", "f8"),
+    ]
+    vals = np.zeros(1, dtype=dt)
+    _fill_nan(vals, 0)
+
+    fitter = GaussMom(fwhm)
+    if psf_res is None:
+        psf_res = fitter.go(obs.psf)
+
+    if psf_res["flags"] != 0:
+        vals["wmom_flags"][0] = ngmix.flags.NO_ATTEMPT
+        return vals
+
+    vals["wmom_psf_T"][0] = psf_res["T"]
+
+    res = fitter.go(obs)
+    vals["wmom_flags"][0] = res["flags"]
+
+    if res["flags"] != 0:
+        return vals
+
+    vals["wmom_g1"][0] = res["e"][0]
+    vals["wmom_g2"][0] = res["e"][1]
+    vals["wmom_T_ratio"][0] = res["T"] / psf_res["T"]
+    vals["wmom_s2n"][0] = res["s2n"]
+
+    return vals
+
+
+def fit_gauss_mom_mcal_res(mcal_res, fwhm=1.2):
+    """Fit a mcal result dict using Gaussian moments.
 
     Parameters
     ----------

@@ -307,6 +307,7 @@ def metacal_wide_and_deep_psf_matched(
     step=DEFAULT_STEP,
     skip_obs_wide_corrections=False,
     skip_obs_deep_corrections=False,
+    return_noshear_deep=False,
 ):
     """Do metacalibration for a combination of wide+deep datasets."""
 
@@ -346,7 +347,8 @@ def metacal_wide_and_deep_psf_matched(
     # we report the wide obs as noshear for later measurements
     noshear_res = mcal_res.pop("noshear")
     mcal_res["noshear"] = mcal_obs_wide
-    mcal_res["noshear_deep"] = noshear_res
+    if return_noshear_deep:
+        mcal_res["noshear_deep"] = noshear_res
 
     for k in mcal_res:
         mcal_res[k].psf.galsim_obj = reconv_psf
