@@ -88,6 +88,43 @@ def test_single_band_deep_field_metadetect_smoke():
         assert np.isfinite(res_m[col]).all()
 
 
+def test_single_band_deep_field_metadetect_bmask():
+    rng = np.random.RandomState(seed=1234)
+    obs_w, obs_d, obs_dn = make_simple_sim(
+        seed=1234,
+        g1=0.02,
+        g2=0.00,
+        s2n=1000,
+        deep_noise_fac=1.0 / np.sqrt(10),
+        deep_psf_fac=1,
+        dim=201,
+        buff=25,
+        n_objs=10,
+    )
+    obs_w.bmask = rng.choice([0, 1, 3], p=[0.5, 0.25, 0.25], size=obs_w.image.shape)
+
+    res = single_band_deep_field_metadetect(
+        obs_w,
+        obs_d,
+        obs_dn,
+        skip_obs_wide_corrections=False,
+        skip_obs_deep_corrections=False,
+    )
+
+    xc = (res["x"] + 0.5).astype(int)
+    yc = (res["y"] + 0.5).astype(int)
+    msk = res["mdet_step"] == "noshear"
+    assert np.array_equal(obs_w.bmask[yc[msk], xc[msk]], res["bmask_flags"][msk])
+    assert np.any(res["bmask_flags"][msk] != 0)
+
+    for step in ["1p", "1m", "2p", "2m"]:
+        msk = res["mdet_step"] == step
+        assert not np.array_equal(
+            obs_d.bmask[yc[msk], xc[msk]] | obs_dn.bmask[yc[msk], xc[msk]],
+            res["bmask_flags"][msk],
+        )
+
+
 @pytest.mark.parametrize("deep_psf_ratio", [0.8, 1, 1.1])
 def test_single_band_deep_field_metadetect(deep_psf_ratio):
     nsims = 100

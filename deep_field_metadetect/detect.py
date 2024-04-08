@@ -240,6 +240,11 @@ def generate_mbobs_for_detections(
         The size of the sub-boxes around the objects. Default is 48.
     ids : list or array-like, optional
         The IDs of the objects. If None, the IDs are the indices of the positions.
+
+    Returns
+    -------
+    generator
+        A generator that yields a tuple of the object information and the sub-mbobs.
     """
     half_box_size = box_size // 2
 
