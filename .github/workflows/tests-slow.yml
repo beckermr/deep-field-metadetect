@@ -1,0 +1,42 @@
+name: tests-slow
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  PY_COLORS: "1"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests-slow:
+    name: tests-slow
+    runs-on: "ubuntu-latest"
+    defaults:
+      run:
+        shell: bash -leo pipefail {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: environment.yml
+          environment-name: dfmdet
+
+      - name: install code
+        run: |
+          pip install --no-deps --no-build-isolation -e .
+
+      - name: run pytest
+        run: |
+          pytest \
+            -v \
+            --durations 10 \
+            --slow \
+            -m "slow" \
+            deep_field_metadetect
