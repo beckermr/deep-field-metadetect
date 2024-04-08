@@ -79,7 +79,9 @@ def single_band_deep_field_metadetect(
             ys=detres["catalog"]["y"],
         ):
             fres = fit_gauss_mom_obs_and_psf(mbobs[0][0], psf_res=psf_res)
-            dfmdet_res.append((n_det, obj["x"], obj["y"], shear) + tuple(fres[0]))
+            dfmdet_res.append(
+                (n_det, obj["x"], obj["y"], shear, obj["bmask_flags"]) + tuple(fres[0])
+            )
             n_det += 1
 
     total_dtype = [
@@ -87,6 +89,7 @@ def single_band_deep_field_metadetect(
         ("x", "f8"),
         ("y", "f8"),
         ("mdet_step", "U7"),
+        ("bmask_flags", "i4"),
     ] + fres.dtype.descr
 
     return np.array(dfmdet_res, dtype=total_dtype)

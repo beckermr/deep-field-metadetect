@@ -252,6 +252,10 @@ def generate_mbobs_for_detections(
         end_x = ix + half_box_size + 1  # plus one for slices
         end_y = iy + half_box_size + 1
 
+        ixc = int(x + 0.5)
+        iyc = int(y + 0.5)
+        bmask_flags = 0
+
         _mbobs = ngmix.MultiBandObsList()
         for obslist in mbobs:
             _obslist = ngmix.ObsList()
@@ -260,12 +264,15 @@ def generate_mbobs_for_detections(
                 _obslist.append(
                     _get_subobs(obs, x, y, start_x, start_y, end_x, end_y, box_size)
                 )
+                if obs.has_bmask():
+                    bmask_flags |= obs.bmask[iyc, ixc]
 
         yield (
             {
                 "id": ids[i] if ids is not None else i,
                 "x": x,
                 "y": y,
+                "bmask_flags": bmask_flags,
             },
             _mbobs,
         )

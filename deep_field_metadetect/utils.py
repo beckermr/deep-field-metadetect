@@ -165,6 +165,7 @@ def measure_mcal_shear_quants(data, kind="wmom", s2n_cut=10, t_ratio_cut=1.2):
             & np.isfinite(d[kind + "_g1"])
             & np.isfinite(d[kind + "_g2"])
         )
+
         return msk
 
     msks = {}
