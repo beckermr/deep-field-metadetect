@@ -35,7 +35,7 @@ jobs:
       - name: run pytest
         run: |
           pytest \
-            -v \
+            -vvs \
             --durations 10 \
             --slow \
             -m "slow" \
