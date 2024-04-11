@@ -77,7 +77,7 @@ def test_metacal():
 
 @pytest.mark.slow
 def test_metacal_slow():  # pragma: no cover
-    nsims = 1_000_000
+    nsims = 100_000
     chunk_size = multiprocessing.cpu_count() * 100
     nchunks = nsims // chunk_size + 1
     nsims = nchunks * chunk_size

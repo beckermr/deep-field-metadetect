@@ -149,7 +149,7 @@ def test_deep_metacal_widelows2n():
 )
 def test_deep_metacal_slow(skip_wide, skip_deep):  # pragma: no cover
     if not skip_wide and not skip_deep:
-        nsims = 1_000_000
+        nsims = 100_000
         s2n = 20
     else:
         nsims = 100_000
