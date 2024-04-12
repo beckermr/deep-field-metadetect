@@ -125,6 +125,68 @@ def test_single_band_deep_field_metadetect_bmask():
         )
 
 
+def test_single_band_deep_field_metadetect_mfrac_wide():
+    rng = np.random.RandomState(seed=1234)
+    obs_w, obs_d, obs_dn = make_simple_sim(
+        seed=1234,
+        g1=0.02,
+        g2=0.00,
+        s2n=1000,
+        deep_noise_fac=1.0 / np.sqrt(10),
+        deep_psf_fac=1,
+        dim=201,
+        buff=25,
+        n_objs=10,
+    )
+    obs_w.mfrac = rng.uniform(0.5, 0.7, size=obs_w.image.shape)
+
+    res = single_band_deep_field_metadetect(
+        obs_w,
+        obs_d,
+        obs_dn,
+        skip_obs_wide_corrections=False,
+        skip_obs_deep_corrections=False,
+    )
+
+    msk = (res["wmom_flags"] == 0) & (res["mdet_step"] == "noshear")
+    assert np.all(res["mfrac"][msk] >= 0.5)
+    assert np.all(res["mfrac"][msk] <= 0.7)
+
+    msk = (res["wmom_flags"] == 0) & (res["mdet_step"] != "noshear")
+    assert np.all(res["mfrac"][msk] == 0)
+
+
+def test_single_band_deep_field_metadetect_mfrac_deep():
+    rng = np.random.RandomState(seed=1234)
+    obs_w, obs_d, obs_dn = make_simple_sim(
+        seed=1234,
+        g1=0.02,
+        g2=0.00,
+        s2n=1000,
+        deep_noise_fac=1.0 / np.sqrt(10),
+        deep_psf_fac=1,
+        dim=201,
+        buff=25,
+        n_objs=10,
+    )
+    obs_d.mfrac = rng.uniform(0.5, 0.7, size=obs_w.image.shape)
+
+    res = single_band_deep_field_metadetect(
+        obs_w,
+        obs_d,
+        obs_dn,
+        skip_obs_wide_corrections=False,
+        skip_obs_deep_corrections=False,
+    )
+
+    msk = (res["wmom_flags"] == 0) & (res["mdet_step"] != "noshear")
+    assert np.all(res["mfrac"][msk] >= 0.5)
+    assert np.all(res["mfrac"][msk] <= 0.7)
+
+    msk = (res["wmom_flags"] == 0) & (res["mdet_step"] == "noshear")
+    assert np.all(res["mfrac"][msk] == 0)
+
+
 @pytest.mark.parametrize("deep_psf_ratio", [0.8, 1, 1.1])
 def test_single_band_deep_field_metadetect(deep_psf_ratio):
     nsims = 100

@@ -206,7 +206,7 @@ def _extract_attr(obs, attr, dtype):
         return np.zeros_like(obs.image, dtype=dtype)
 
 
-def add_ngmix_obs(obs1, obs2, ignore_psf=False):
+def add_ngmix_obs(obs1, obs2, ignore_psf=False, skip_mfrac_for_second=False):
     """Add two ngmix observations"""
 
     if repr(obs1.jacobian) != repr(obs2.jacobian):
@@ -265,11 +265,15 @@ def add_ngmix_obs(obs1, obs2, ignore_psf=False):
             obs2, "noise", np.float32
         )
 
-    if obs1.has_mfrac() or obs2.has_mfrac():
-        obs.mfrac = (
-            _extract_attr(obs1, "mfrac", np.float32)
-            + _extract_attr(obs2, "mfrac", np.float32)
-        ) / 2
+    if skip_mfrac_for_second:
+        if obs1.has_mfrac():
+            obs.mfrac = _extract_attr(obs1, "mfrac", np.float32)
+    else:
+        if obs1.has_mfrac() or obs2.has_mfrac():
+            obs.mfrac = (
+                _extract_attr(obs1, "mfrac", np.float32)
+                + _extract_attr(obs2, "mfrac", np.float32)
+            ) / 2
 
     obs.update_meta_data(obs1.meta)
     obs.update_meta_data(obs2.meta)
@@ -321,6 +325,7 @@ def metacal_wide_and_deep_psf_matched(
         mcal_obs_wide = add_ngmix_obs(
             match_psf(obs_wide, reconv_psf),
             metacal_op_g1g2(obs_deep_noise, reconv_psf, 0, 0),
+            skip_mfrac_for_second=True,
         )
 
     # get PSF matched noise
@@ -342,6 +347,7 @@ def metacal_wide_and_deep_psf_matched(
             mcal_res[k] = add_ngmix_obs(
                 mcal_res[k],
                 wide_noise_corr,
+                skip_mfrac_for_second=True,
             )
 
     # we report the wide obs as noshear for later measurements
