@@ -1,28 +1,31 @@
-import numpy as np
 import galsim
+import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
 from deep_field_metadetect.mfrac import compute_mfrac_interp_image
 
 
-@pytest.mark.parametrize("loc", [
-    (0, 0),
-    (0, 1),
-    (1, 0),
-    (1, 1),
-    (50, 50),
-    (50, 51),
-    (51, 50),
-    (51, 51),
-    (99, 99),
-    (99, 98),
-    (98, 99),
-    (98, 98),
-    (100, 100),
-    (100, 99),
-    (99, 100),
-])
+@pytest.mark.parametrize(
+    "loc",
+    [
+        (0, 0),
+        (0, 1),
+        (1, 0),
+        (1, 1),
+        (50, 50),
+        (50, 51),
+        (51, 50),
+        (51, 51),
+        (99, 99),
+        (99, 98),
+        (98, 99),
+        (98, 98),
+        (100, 100),
+        (100, 99),
+        (99, 100),
+    ],
+)
 @pytest.mark.parametrize("dim", [100, 101])
 def test_compute_mfrac_interp_image_pixel_loc(dim, loc):
     if any([lv >= dim for lv in loc]):
