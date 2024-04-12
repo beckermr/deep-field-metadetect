@@ -10,6 +10,7 @@ from deep_field_metadetect.metacal import (
     DEFAULT_STEP,
     metacal_wide_and_deep_psf_matched,
 )
+from deep_field_metadetect.mfrac import compute_mfrac_interp_image
 from deep_field_metadetect.utils import fit_gauss_mom_obs, fit_gauss_mom_obs_and_psf
 
 
@@ -69,13 +70,23 @@ def single_band_deep_field_metadetect(
     )
     psf_res = fit_gauss_mom_obs(mcal_res["noshear"].psf)
     dfmdet_res = []
-    n_det = 0
     for shear, obs in mcal_res.items():
         detres = run_detection_sep(obs, nodet_flags=nodet_flags)
 
         ixc = (detres["catalog"]["x"] + 0.5).astype(int)
         iyc = (detres["catalog"]["y"] + 0.5).astype(int)
         bmask_flags = obs.bmask[iyc, ixc]
+
+        mfrac_vals = np.zeros_like(bmask_flags, dtype="f4")
+        if np.any(obs.mfrac > 0):
+            _interp_mfrac = compute_mfrac_interp_image(
+                obs.mfrac,
+                obs.jacobian.get_galsim_wcs(),
+            )
+            for i, (x, y) in enumerate(
+                zip(detres["catalog"]["x"], detres["catalog"]["y"])
+            ):
+                mfrac_vals[i] = _interp_mfrac.xValue(x, y)
 
         for ind, (obj, mbobs) in enumerate(
             generate_mbobs_for_detections(
@@ -86,9 +97,9 @@ def single_band_deep_field_metadetect(
         ):
             fres = fit_gauss_mom_obs_and_psf(mbobs[0][0], psf_res=psf_res)
             dfmdet_res.append(
-                (n_det, obj["x"], obj["y"], shear, bmask_flags[ind]) + tuple(fres[0])
+                (ind + 1, obj["x"], obj["y"], shear, bmask_flags[ind], mfrac_vals[ind])
+                + tuple(fres[0])
             )
-            n_det += 1
 
     total_dtype = [
         ("id", "i8"),
@@ -96,6 +107,7 @@ def single_band_deep_field_metadetect(
         ("y", "f8"),
         ("mdet_step", "U7"),
         ("bmask_flags", "i4"),
+        ("mfrac", "f4"),
     ] + fres.dtype.descr
 
     return np.array(dfmdet_res, dtype=total_dtype)
