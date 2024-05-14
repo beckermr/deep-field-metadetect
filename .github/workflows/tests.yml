@@ -59,7 +59,7 @@ jobs:
       - name: run pytest
         run: |
           pytest \
-            -v \
+            -vvs \
             --cov=deep_field_metadetect \
             --cov=tests \
             --cov-config=.coveragerc \
