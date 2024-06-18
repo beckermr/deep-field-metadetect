@@ -273,8 +273,12 @@ def test_metadetect_single_band_deep_field_metadetect_slow(
 
         if not skip_wide and not skip_deep:
             assert np.abs(m) < max(MAX_ABS_M, 3 * merr), (m, merr)
-        elif 3 * merr < 5e-3:
+        else:
             assert np.abs(m) >= max(MAX_ABS_M, 3 * merr), (m, merr)
+            # if we are more than 10 sigma biased, then the test
+            # has passed for sure
+            if np.abs(m) / max(MAX_ABS_M / 3, merr) >= 10:
+                break
         assert np.abs(c1) < max(4.0 * c1err, MAX_ABS_C), (c1, c1err)
         assert np.abs(c2) < max(4.0 * c2err, MAX_ABS_C), (c2, c2err)
 
