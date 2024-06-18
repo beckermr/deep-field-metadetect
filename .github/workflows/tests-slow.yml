@@ -73,7 +73,7 @@ jobs:
             deep_field_metadetect
 
   tests-slow-deep-metadetect:
-    name: tests-slow-deep-metacal
+    name: tests-slow-deep-metadetect
     runs-on: "ubuntu-latest"
     defaults:
       run:
