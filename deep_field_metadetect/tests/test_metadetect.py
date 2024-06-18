@@ -81,14 +81,14 @@ def _run_sim_pair(seed, s2n, deep_noise_fac, deep_psf_fac, skip_wide, skip_deep)
     return res_p, res_m
 
 
-def test_single_band_deep_field_metadetect_smoke():
+def test_metadetect_single_band_deep_field_metadetect_smoke():
     res_p, res_m = _run_sim_pair(1234, 1e4, 1.0 / np.sqrt(10), 1, False, False)
     for col in res_p.dtype.names:
         assert np.isfinite(res_p[col]).all()
         assert np.isfinite(res_m[col]).all()
 
 
-def test_single_band_deep_field_metadetect_bmask():
+def test_metadetect_single_band_deep_field_metadetect_bmask():
     rng = np.random.RandomState(seed=1234)
     obs_w, obs_d, obs_dn = make_simple_sim(
         seed=1234,
@@ -125,7 +125,7 @@ def test_single_band_deep_field_metadetect_bmask():
         )
 
 
-def test_single_band_deep_field_metadetect_mfrac_wide():
+def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
     rng = np.random.RandomState(seed=1234)
     obs_w, obs_d, obs_dn = make_simple_sim(
         seed=1234,
@@ -156,7 +156,7 @@ def test_single_band_deep_field_metadetect_mfrac_wide():
     assert np.all(res["mfrac"][msk] == 0)
 
 
-def test_single_band_deep_field_metadetect_mfrac_deep():
+def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
     rng = np.random.RandomState(seed=1234)
     obs_w, obs_d, obs_dn = make_simple_sim(
         seed=1234,
@@ -188,7 +188,7 @@ def test_single_band_deep_field_metadetect_mfrac_deep():
 
 
 @pytest.mark.parametrize("deep_psf_ratio", [0.8, 1, 1.1])
-def test_single_band_deep_field_metadetect(deep_psf_ratio):
+def test_metadetect_single_band_deep_field_metadetect(deep_psf_ratio):
     nsims = 100
     noise_fac = 1 / np.sqrt(30)
 
@@ -223,7 +223,7 @@ def test_single_band_deep_field_metadetect(deep_psf_ratio):
 @pytest.mark.parametrize(
     "skip_wide,skip_deep", [(True, True), (True, False), (False, True), (False, False)]
 )
-def test_single_band_deep_field_metadetect_slow(
+def test_metadetect_single_band_deep_field_metadetect_slow(
     skip_wide, skip_deep
 ):  # pragma: no cover
     if not skip_wide and not skip_deep:

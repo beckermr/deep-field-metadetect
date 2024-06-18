@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch: null
 
 env:
   PY_COLORS: "1"
@@ -13,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  tests-slow:
-    name: tests-slow
+  tests-slow-metacal:
+    name: tests-slow-metacal
     runs-on: "ubuntu-latest"
     defaults:
       run:
@@ -39,4 +40,63 @@ jobs:
             --durations 10 \
             --slow \
             -m "slow" \
+            -k test_metacal \
+            deep_field_metadetect
+
+  tests-slow-deep-metacal:
+    name: tests-slow-deep-metacal
+    runs-on: "ubuntu-latest"
+    defaults:
+      run:
+        shell: bash -leo pipefail {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: environment.yml
+          environment-name: dfmdet
+
+      - name: install code
+        run: |
+          pip install --no-deps --no-build-isolation -e .
+
+      - name: run pytest
+        run: |
+          pytest \
+            -vvs \
+            --durations 10 \
+            --slow \
+            -m "slow" \
+            -k test_deep_metacal \
+            deep_field_metadetect
+
+  tests-slow-deep-metadetect:
+    name: tests-slow-deep-metacal
+    runs-on: "ubuntu-latest"
+    defaults:
+      run:
+        shell: bash -leo pipefail {0}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: environment.yml
+          environment-name: dfmdet
+
+      - name: install code
+        run: |
+          pip install --no-deps --no-build-isolation -e .
+
+      - name: run pytest
+        run: |
+          pytest \
+            -vvs \
+            --durations 10 \
+            --slow \
+            -m "slow" \
+            -k test_metadetect \
             deep_field_metadetect
