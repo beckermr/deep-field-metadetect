@@ -21,7 +21,7 @@ repos:
       - id: black
         language_version: python3.11
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.19.0
+    rev: v3.19.1
     hooks:
       - id: pyupgrade
         args:
@@ -33,7 +33,7 @@ repos:
         name: isort (python)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.8.1
+    rev: v0.8.6
     hooks:
       # Run the linter.
       - id: ruff
