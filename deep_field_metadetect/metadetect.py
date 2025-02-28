@@ -8,16 +8,20 @@ from deep_field_metadetect.detect import (
 from deep_field_metadetect.metacal import (
     DEFAULT_SHEARS,
     DEFAULT_STEP,
-    metacal_wide_and_deep_psf_matched,
+    jax_metacal_wide_and_deep_psf_matched,
 )
 from deep_field_metadetect.mfrac import compute_mfrac_interp_image
 from deep_field_metadetect.utils import fit_gauss_mom_obs, fit_gauss_mom_obs_and_psf
 
 
-def single_band_deep_field_metadetect(
+def jax_single_band_deep_field_metadetect(
     obs_wide,
     obs_deep,
     obs_deep_noise,
+    dk_w,
+    dk_d,
+    nxy,
+    nxy_psf,
     step=DEFAULT_STEP,
     shears=None,
     skip_obs_wide_corrections=False,
@@ -59,15 +63,20 @@ def single_band_deep_field_metadetect(
     if shears is None:
         shears = DEFAULT_SHEARS
 
-    mcal_res = metacal_wide_and_deep_psf_matched(
-        obs_wide,
-        obs_deep,
-        obs_deep_noise,
+    mcal_res = jax_metacal_wide_and_deep_psf_matched(
+        obs_wide=obs_wide,
+        obs_deep=obs_deep,
+        obs_deep_noise=obs_deep_noise,
+        dk_w=dk_w,
+        dk_d=dk_d,
+        nxy=nxy,
+        nxy_psf=nxy_psf,
         step=step,
         shears=shears,
         skip_obs_wide_corrections=skip_obs_wide_corrections,
         skip_obs_deep_corrections=skip_obs_deep_corrections,
-    )
+    ) # This returns ngmix Obs for now
+
     psf_res = fit_gauss_mom_obs(mcal_res["noshear"].psf)
     dfmdet_res = []
     for shear, obs in mcal_res.items():
