@@ -2,12 +2,17 @@ import sys
 import time
 from contextlib import contextmanager
 
-import galsim
+import jax_galsim
+import jax.numpy as jnp 
+
 import ngmix
 import numpy as np
 from ngmix.gaussmom import GaussMom
 
 from deep_field_metadetect.metacal import DEFAULT_SHEARS
+from deep_field_metadetect.observation import ngmix_Obs_to_NT, NT_to_ngmix_obs, NTObservation
+
+from ngmix.observation import Observation
 
 GLOBAL_START_TIME = time.time()
 MAX_ABS_C = 1e-7
@@ -297,7 +302,12 @@ def fit_gauss_mom_mcal_res(mcal_res, fwhm=1.2):
     vals = np.zeros(len(mcal_res), dtype=dt)
 
     fitter = GaussMom(fwhm)
-    psf_res = fitter.go(mcal_res["noshear"].psf)
+    
+    psf = mcal_res["noshear"].psf
+    if isinstance(psf, NTObservation):
+        psf = NT_to_ngmix_obs(mcal_res["noshear"].psf)
+    psf_res = fitter.go(psf)
+
 
     for i, (shear, obs) in enumerate(mcal_res.items()):
         vals["mdet_step"][i] = shear
@@ -309,7 +319,10 @@ def fit_gauss_mom_mcal_res(mcal_res, fwhm=1.2):
 
         vals["wmom_psf_T"][i] = psf_res["T"]
 
+        if isinstance(obs, NTObservation):
+            obs = NT_to_ngmix_obs(obs)
         res = fitter.go(obs)
+  
         vals["wmom_flags"][i] = res["flags"]
 
         if res["flags"] != 0:
@@ -541,14 +554,14 @@ def _gen_hex_grid(*, rng, dim, buff, pixel_scale, n_tot):
     return shifts
 
 
-def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim):
+def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim, dim_psf):
     cen = (dim - 1) / 2
 
     im = obj.drawImage(nx=dim, ny=dim, scale=scale).array
     im += rng.normal(size=im.shape, scale=nse)
 
-    cen_psf = (53 - 1) / 2
-    psf_im = psf.drawImage(nx=53, ny=53, scale=scale).array
+    cen_psf = (dim_psf - 1) / 2
+    psf_im = psf.drawImage(nx=dim_psf, ny=dim_psf, scale=scale).array
 
     if dither is not None:
         jac = ngmix.DiagonalJacobian(
@@ -558,17 +571,17 @@ def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim):
         jac = ngmix.DiagonalJacobian(scale=scale, row=cen, col=cen)
     psf_jac = ngmix.DiagonalJacobian(scale=scale, row=cen_psf, col=cen_psf)
 
-    obs = ngmix.Observation(
+    obs = Observation(
         image=im,
-        weight=np.ones_like(im) / nse**2,
+        weight=jnp.ones_like(im) / nse**2,
         jacobian=jac,
         psf=ngmix.Observation(
             image=psf_im,
             jacobian=psf_jac,
         ),
         noise=rng.normal(size=im.shape, scale=nse),
-        bmask=np.zeros_like(im, dtype=np.int32),
-        mfrac=np.zeros_like(im),
+        bmask=jnp.zeros_like(im, dtype=np.int32),
+        mfrac=jnp.zeros_like(im),
     )
     return obs
 
@@ -584,6 +597,7 @@ def make_simple_sim(
     n_objs=1,
     scale=0.2,
     dim=53,
+    dim_psf=53,
     buff=26,
     obj_flux_factor=1,
 ):
@@ -641,7 +655,7 @@ def make_simple_sim(
 
     n_objs = _n_objs
 
-    gal = galsim.Exponential(half_light_radius=0.5).shear(g1=g1, g2=g2)
+    gal = jax_galsim.Exponential(half_light_radius=0.5).shear(g1=g1, g2=g2)
     gals = None
     for shift in shifts:
         if gals is None:
@@ -649,14 +663,14 @@ def make_simple_sim(
         else:
             gals += gal.shift(*shift)
 
-    psf = galsim.Moffat(beta=2.5, fwhm=0.8)
-    deep_psf = galsim.Moffat(beta=2.5, fwhm=0.8 * deep_psf_fac)
-    objs = galsim.Convolve([gals, psf])
-    deep_objs = galsim.Convolve([gals, deep_psf])
+    psf = jax_galsim.Moffat(beta=2.5, fwhm=0.8)
+    deep_psf = jax_galsim.Moffat(beta=2.5, fwhm=0.8 * deep_psf_fac)
+    objs = jax_galsim.Convolve([gals, psf])
+    deep_objs = jax_galsim.Convolve([gals, deep_psf])
 
     # estimate noise level
-    im = galsim.Convolve([gal, psf]).drawImage(nx=dim, ny=dim, scale=scale).array
-    nse = np.sqrt(np.sum(im**2)) / s2n
+    im = jax_galsim.Convolve([gal, psf]).drawImage(nx=dim, ny=dim, scale=scale).array
+    nse = jnp.sqrt(jnp.sum(im**2)) / s2n
 
     # apply the flux factor now that we have the noise level
     objs *= obj_flux_factor
@@ -670,6 +684,7 @@ def make_simple_sim(
         dither=shifts[0] / scale if n_objs == 1 else None,
         scale=scale,
         dim=dim,
+        dim_psf=dim_psf,
     )
 
     obs_deep = _make_single_sim(
@@ -680,6 +695,7 @@ def make_simple_sim(
         dither=shifts[0] / scale if n_objs == 1 else None,
         scale=scale,
         dim=dim,
+        dim_psf=dim_psf,
     )
 
     obs_deep_noise = _make_single_sim(
@@ -690,6 +706,7 @@ def make_simple_sim(
         dither=shifts[0] / scale if n_objs == 1 else None,
         scale=scale,
         dim=dim,
+        dim_psf=dim_psf,
     )
 
-    return obs_wide, obs_deep, obs_deep_noise
+    return ngmix_Obs_to_NT(obs_wide), ngmix_Obs_to_NT(obs_deep), ngmix_Obs_to_NT(obs_deep_noise)
