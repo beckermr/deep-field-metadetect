@@ -2,11 +2,12 @@ import multiprocessing
 
 import joblib
 import numpy as np
+import jax.numpy as jnp
 import pytest
 
 from deep_field_metadetect.metacal import (
-    metacal_op_shears,
-    metacal_wide_and_deep_psf_matched,
+    jax_metacal_op_shears,
+    jax_metacal_wide_and_deep_psf_matched,
 )
 from deep_field_metadetect.utils import (
     MAX_ABS_C,
@@ -38,10 +39,14 @@ def _run_single_sim(
         deep_noise_fac=deep_noise_fac,
         deep_psf_fac=deep_psf_fac,
     )
-    mcal_res = metacal_wide_and_deep_psf_matched(
+    mcal_res = jax_metacal_wide_and_deep_psf_matched(
         obs_w,
         obs_d,
         obs_dn,
+        dk_w=2*jnp.pi/(53 * .2)/4,
+        dk_d=2*jnp.pi/(53 * .2)/4,
+        nxy=53,
+        nxy_psf=53,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
     )
@@ -235,11 +240,11 @@ def _run_single_sim_maybe_mcal(
         obj_flux_factor=0.0 if zero_flux else 1.0,
     )
     if use_mcal:
-        mcal_res = metacal_op_shears(
+        mcal_res = jax_metacal_op_shears(
             obs_w,
         )
     else:
-        mcal_res = metacal_wide_and_deep_psf_matched(
+        mcal_res = jax_metacal_wide_and_deep_psf_matched(
             obs_w,
             obs_d,
             obs_dn,

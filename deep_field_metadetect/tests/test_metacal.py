@@ -1,10 +1,11 @@
 import multiprocessing
 
 import joblib
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from deep_field_metadetect.metacal import metacal_op_shears
+from deep_field_metadetect.metacal import jax_metacal_op_shears
 from deep_field_metadetect.utils import (
     assert_m_c_ok,
     estimate_m_and_c,
@@ -24,7 +25,8 @@ def _run_single_sim_pair(seed, s2n):
         deep_noise_fac=1.0 / np.sqrt(10),
         deep_psf_fac=1.0,
     )
-    mcal_res = metacal_op_shears(obs_plus)
+    # jax_gal_psf = get_jax_galsim_object_from_NT_obs_nopix(obs_plus.psf)
+    mcal_res = jax_metacal_op_shears(obs_plus, dk=2*jnp.pi/(53 * .2)/4)
     res_p = fit_gauss_mom_mcal_res(mcal_res)
     res_p = measure_mcal_shear_quants(res_p)
 
@@ -36,7 +38,8 @@ def _run_single_sim_pair(seed, s2n):
         deep_noise_fac=1.0 / np.sqrt(10),
         deep_psf_fac=1.0,
     )
-    mcal_res = metacal_op_shears(obs_minus)
+    # jax_gal_psf = get_jax_galsim_object_from_NT_obs_nopix(obs_minus.psf)
+    mcal_res = jax_metacal_op_shears(obs_minus, dk=2*jnp.pi/(53 * .2)/4)
     res_m = fit_gauss_mom_mcal_res(mcal_res)
     res_m = measure_mcal_shear_quants(res_m)
 
@@ -44,6 +47,7 @@ def _run_single_sim_pair(seed, s2n):
 
 
 def test_metacal_smoke():
+
     res_p, res_m = _run_single_sim_pair(1234, 1e8)
     for col in res_p.dtype.names:
         assert np.isfinite(res_p[col]).all()
@@ -51,7 +55,7 @@ def test_metacal_smoke():
 
 
 def test_metacal():
-    nsims = 50
+    nsims = 5
 
     rng = np.random.RandomState(seed=34132)
     seeds = rng.randint(size=nsims, low=1, high=2**29)

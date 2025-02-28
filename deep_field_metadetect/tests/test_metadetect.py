@@ -3,8 +3,9 @@ import multiprocessing
 import joblib
 import numpy as np
 import pytest
+import jax.numpy as jnp
 
-from deep_field_metadetect.metadetect import single_band_deep_field_metadetect
+from deep_field_metadetect.metadetect import jax_single_band_deep_field_metadetect
 from deep_field_metadetect.utils import (
     MAX_ABS_C,
     MAX_ABS_M,
@@ -35,6 +36,7 @@ def _run_single_sim(
         deep_noise_fac=deep_noise_fac,
         deep_psf_fac=deep_psf_fac,
         dim=201,
+        dim_psf=53,
         buff=25,
         n_objs=10,
     )
@@ -45,10 +47,14 @@ def _run_single_sim(
 
         pdb.set_trace()
 
-    res = single_band_deep_field_metadetect(
+    res = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
+        dk_w=2*jnp.pi/(53 * .2)/4,
+        dk_d=2*jnp.pi/(53 * .2)/4,
+        nxy=201,
+        nxy_psf=53,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
     )
@@ -101,12 +107,16 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
         buff=25,
         n_objs=10,
     )
-    obs_w.bmask = rng.choice([0, 1, 3], p=[0.5, 0.25, 0.25], size=obs_w.image.shape)
+    obs_w = obs_w._replace(bmask = rng.choice([0, 1, 3], p=[0.5, 0.25, 0.25], size=obs_w.image.shape))
 
-    res = single_band_deep_field_metadetect(
+    res = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
+        dk_w=2*jnp.pi/(53 * .2)/4,
+        dk_d=2*jnp.pi/(53 * .2)/4,
+        nxy=201,
+        nxy_psf=53,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
     )
@@ -138,12 +148,16 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
         buff=25,
         n_objs=10,
     )
-    obs_w.mfrac = rng.uniform(0.5, 0.7, size=obs_w.image.shape)
+    obs_w = obs_w._replace(mfrac = rng.uniform(0.5, 0.7, size=obs_w.image.shape))
 
-    res = single_band_deep_field_metadetect(
+    res = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
+        dk_w=2*jnp.pi/(53 * .2)/4,
+        dk_d=2*jnp.pi/(53 * .2)/4,
+        nxy=201,
+        nxy_psf=53,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
     )
@@ -169,12 +183,16 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
         buff=25,
         n_objs=10,
     )
-    obs_d.mfrac = rng.uniform(0.5, 0.7, size=obs_w.image.shape)
+    obs_d = obs_d._replace(mfrac = rng.uniform(0.5, 0.7, size=obs_w.image.shape))
 
-    res = single_band_deep_field_metadetect(
+    res = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
+        dk_w=2*jnp.pi/(53 * .2)/4,
+        dk_d=2*jnp.pi/(53 * .2)/4,
+        nxy=201,
+        nxy_psf=53,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
     )
