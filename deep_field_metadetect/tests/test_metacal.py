@@ -1,7 +1,7 @@
 import multiprocessing
 
-import joblib
 import jax.numpy as jnp
+import joblib
 import numpy as np
 import pytest
 
@@ -26,7 +26,7 @@ def _run_single_sim_pair(seed, s2n):
         deep_psf_fac=1.0,
     )
     # jax_gal_psf = get_jax_galsim_object_from_NT_obs_nopix(obs_plus.psf)
-    mcal_res = jax_metacal_op_shears(obs_plus, dk=2*jnp.pi/(53 * .2)/4)
+    mcal_res = jax_metacal_op_shears(obs_plus, dk=2 * jnp.pi / (53 * 0.2) / 4)
     res_p = fit_gauss_mom_mcal_res(mcal_res)
     res_p = measure_mcal_shear_quants(res_p)
 
@@ -39,7 +39,7 @@ def _run_single_sim_pair(seed, s2n):
         deep_psf_fac=1.0,
     )
     # jax_gal_psf = get_jax_galsim_object_from_NT_obs_nopix(obs_minus.psf)
-    mcal_res = jax_metacal_op_shears(obs_minus, dk=2*jnp.pi/(53 * .2)/4)
+    mcal_res = jax_metacal_op_shears(obs_minus, dk=2 * jnp.pi / (53 * 0.2) / 4)
     res_m = fit_gauss_mom_mcal_res(mcal_res)
     res_m = measure_mcal_shear_quants(res_m)
 
@@ -47,7 +47,6 @@ def _run_single_sim_pair(seed, s2n):
 
 
 def test_metacal_smoke():
-
     res_p, res_m = _run_single_sim_pair(1234, 1e8)
     for col in res_p.dtype.names:
         assert np.isfinite(res_p[col]).all()
