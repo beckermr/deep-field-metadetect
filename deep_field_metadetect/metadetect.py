@@ -8,11 +8,12 @@ from deep_field_metadetect.detect import (
 from deep_field_metadetect.metacal import (
     DEFAULT_SHEARS,
     DEFAULT_STEP,
-    metacal_wide_and_deep_psf_matched,
     jax_metacal_wide_and_deep_psf_matched,
+    metacal_wide_and_deep_psf_matched,
 )
 from deep_field_metadetect.mfrac import compute_mfrac_interp_image
 from deep_field_metadetect.utils import fit_gauss_mom_obs, fit_gauss_mom_obs_and_psf
+
 
 def single_band_deep_field_metadetect(
     obs_wide,
@@ -174,7 +175,7 @@ def jax_single_band_deep_field_metadetect(
         shears=shears,
         skip_obs_wide_corrections=skip_obs_wide_corrections,
         skip_obs_deep_corrections=skip_obs_deep_corrections,
-    ) # This returns ngmix Obs for now
+    )  # This returns ngmix Obs for now
 
     psf_res = fit_gauss_mom_obs(mcal_res["noshear"].psf)
     dfmdet_res = []
@@ -219,5 +220,3 @@ def jax_single_band_deep_field_metadetect(
     ] + fres.dtype.descr
 
     return np.array(dfmdet_res, dtype=total_dtype)
-
-

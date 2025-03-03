@@ -2,17 +2,19 @@ import sys
 import time
 from contextlib import contextmanager
 
+import jax.numpy as jnp
 import jax_galsim
-import jax.numpy as jnp 
-
 import ngmix
 import numpy as np
 from ngmix.gaussmom import GaussMom
+from ngmix.observation import Observation
 
 from deep_field_metadetect.metacal import DEFAULT_SHEARS
-from deep_field_metadetect.observation import ngmix_Obs_to_NT, NT_to_ngmix_obs, NTObservation
-
-from ngmix.observation import Observation
+from deep_field_metadetect.observation import (
+    NT_to_ngmix_obs,
+    NTObservation,
+    ngmix_Obs_to_NT,
+)
 
 GLOBAL_START_TIME = time.time()
 MAX_ABS_C = 1e-7
@@ -302,12 +304,11 @@ def fit_gauss_mom_mcal_res(mcal_res, fwhm=1.2):
     vals = np.zeros(len(mcal_res), dtype=dt)
 
     fitter = GaussMom(fwhm)
-    
+
     psf = mcal_res["noshear"].psf
     if isinstance(psf, NTObservation):
         psf = NT_to_ngmix_obs(mcal_res["noshear"].psf)
     psf_res = fitter.go(psf)
-
 
     for i, (shear, obs) in enumerate(mcal_res.items()):
         vals["mdet_step"][i] = shear
@@ -322,7 +323,7 @@ def fit_gauss_mom_mcal_res(mcal_res, fwhm=1.2):
         if isinstance(obs, NTObservation):
             obs = NT_to_ngmix_obs(obs)
         res = fitter.go(obs)
-  
+
         vals["wmom_flags"][i] = res["flags"]
 
         if res["flags"] != 0:
@@ -709,4 +710,8 @@ def make_simple_sim(
         dim_psf=dim_psf,
     )
 
-    return ngmix_Obs_to_NT(obs_wide), ngmix_Obs_to_NT(obs_deep), ngmix_Obs_to_NT(obs_deep_noise)
+    return (
+        ngmix_Obs_to_NT(obs_wide),
+        ngmix_Obs_to_NT(obs_deep),
+        ngmix_Obs_to_NT(obs_deep_noise),
+    )

@@ -1,8 +1,8 @@
 import multiprocessing
 
+import jax.numpy as jnp
 import joblib
 import numpy as np
-import jax.numpy as jnp
 import pytest
 
 from deep_field_metadetect.metacal import (
@@ -43,8 +43,8 @@ def _run_single_sim(
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2*jnp.pi/(53 * .2)/4,
-        dk_d=2*jnp.pi/(53 * .2)/4,
+        dk_w=2 * jnp.pi / (53 * 0.2) / 4,
+        dk_d=2 * jnp.pi / (53 * 0.2) / 4,
         nxy=53,
         nxy_psf=53,
         skip_obs_wide_corrections=skip_wide,
