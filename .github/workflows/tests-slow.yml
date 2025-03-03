@@ -91,6 +91,11 @@ jobs:
         run: |
           pip install --no-deps --no-build-isolation -e .
 
+      - name: Run tests with JAX 64-bit enabled
+        run: |
+          export JAX_ENABLE_X64=True
+          pytest
+
       - name: run pytest
         run: |
           pytest \
