@@ -2,8 +2,9 @@ import sys
 import time
 from contextlib import contextmanager
 
-import jax.numpy as jnp
-import jax_galsim
+# import jax.numpy as jnp
+# import jax_galsim
+import galsim
 import ngmix
 import numpy as np
 from ngmix.gaussmom import GaussMom
@@ -574,15 +575,15 @@ def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim, dim_psf):
 
     obs = Observation(
         image=im,
-        weight=jnp.ones_like(im) / nse**2,
+        weight=np.ones_like(im) / nse**2,
         jacobian=jac,
         psf=ngmix.Observation(
             image=psf_im,
             jacobian=psf_jac,
         ),
         noise=rng.normal(size=im.shape, scale=nse),
-        bmask=jnp.zeros_like(im, dtype=np.int32),
-        mfrac=jnp.zeros_like(im),
+        bmask=np.zeros_like(im, dtype=np.int32),
+        mfrac=np.zeros_like(im),
     )
     return obs
 
@@ -601,6 +602,7 @@ def make_simple_sim(
     dim_psf=53,
     buff=26,
     obj_flux_factor=1,
+    return_NT=True,
 ):
     """Make a simple simulation for testing deep-field metadetection.
 
@@ -656,7 +658,7 @@ def make_simple_sim(
 
     n_objs = _n_objs
 
-    gal = jax_galsim.Exponential(half_light_radius=0.5).shear(g1=g1, g2=g2)
+    gal = galsim.Exponential(half_light_radius=0.5).shear(g1=g1, g2=g2)
     gals = None
     for shift in shifts:
         if gals is None:
@@ -664,14 +666,14 @@ def make_simple_sim(
         else:
             gals += gal.shift(*shift)
 
-    psf = jax_galsim.Moffat(beta=2.5, fwhm=0.8)
-    deep_psf = jax_galsim.Moffat(beta=2.5, fwhm=0.8 * deep_psf_fac)
-    objs = jax_galsim.Convolve([gals, psf])
-    deep_objs = jax_galsim.Convolve([gals, deep_psf])
+    psf = galsim.Moffat(beta=2.5, fwhm=0.8)
+    deep_psf = galsim.Moffat(beta=2.5, fwhm=0.8 * deep_psf_fac)
+    objs = galsim.Convolve([gals, psf])
+    deep_objs = galsim.Convolve([gals, deep_psf])
 
     # estimate noise level
-    im = jax_galsim.Convolve([gal, psf]).drawImage(nx=dim, ny=dim, scale=scale).array
-    nse = jnp.sqrt(jnp.sum(im**2)) / s2n
+    im = galsim.Convolve([gal, psf]).drawImage(nx=dim, ny=dim, scale=scale).array
+    nse = np.sqrt(np.sum(im**2)) / s2n
 
     # apply the flux factor now that we have the noise level
     objs *= obj_flux_factor
@@ -709,9 +711,11 @@ def make_simple_sim(
         dim=dim,
         dim_psf=dim_psf,
     )
+    if return_NT:
+        return (
+            ngmix_Obs_to_NT(obs_wide),
+            ngmix_Obs_to_NT(obs_deep),
+            ngmix_Obs_to_NT(obs_deep_noise),
+        )
 
-    return (
-        ngmix_Obs_to_NT(obs_wide),
-        ngmix_Obs_to_NT(obs_deep),
-        ngmix_Obs_to_NT(obs_deep_noise),
-    )
+    return obs_wide, obs_deep, obs_deep_noise
