@@ -8,14 +8,13 @@ import galsim
 import ngmix
 import numpy as np
 from ngmix.gaussmom import GaussMom
-from ngmix.observation import Observation
 
-from deep_field_metadetect.metacal import DEFAULT_SHEARS
-from deep_field_metadetect.observation import (
+from deep_field_metadetect.jaxify.observation import (
     NT_to_ngmix_obs,
     NTObservation,
     ngmix_Obs_to_NT,
 )
+from deep_field_metadetect.metacal import DEFAULT_SHEARS
 
 GLOBAL_START_TIME = time.time()
 MAX_ABS_C = 1e-7
@@ -309,6 +308,7 @@ def fit_gauss_mom_mcal_res(mcal_res, fwhm=1.2):
     psf = mcal_res["noshear"].psf
     if isinstance(psf, NTObservation):
         psf = NT_to_ngmix_obs(mcal_res["noshear"].psf)
+
     psf_res = fitter.go(psf)
 
     for i, (shear, obs) in enumerate(mcal_res.items()):
@@ -556,7 +556,7 @@ def _gen_hex_grid(*, rng, dim, buff, pixel_scale, n_tot):
     return shifts
 
 
-def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim, dim_psf):
+def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim, dim_psf=53):
     cen = (dim - 1) / 2
 
     im = obj.drawImage(nx=dim, ny=dim, scale=scale).array
@@ -573,7 +573,7 @@ def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim, dim_psf):
         jac = ngmix.DiagonalJacobian(scale=scale, row=cen, col=cen)
     psf_jac = ngmix.DiagonalJacobian(scale=scale, row=cen_psf, col=cen_psf)
 
-    obs = Observation(
+    obs = ngmix.observation.Observation(
         image=im,
         weight=np.ones_like(im) / nse**2,
         jacobian=jac,
@@ -602,7 +602,7 @@ def make_simple_sim(
     dim_psf=53,
     buff=26,
     obj_flux_factor=1,
-    return_NT=True,
+    return_NT=False,
 ):
     """Make a simple simulation for testing deep-field metadetection.
 
