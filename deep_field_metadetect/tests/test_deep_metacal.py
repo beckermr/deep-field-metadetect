@@ -1,15 +1,13 @@
 import multiprocessing
 
-import jax.numpy as jnp
 import joblib
 import numpy as np
 import pytest
 
 from deep_field_metadetect.metacal import (
-    jax_metacal_op_shears,
-    jax_metacal_wide_and_deep_psf_matched,
+    metacal_op_shears,
+    metacal_wide_and_deep_psf_matched,
 )
-from deep_field_metadetect.observation import NT_to_ngmix_obs
 from deep_field_metadetect.utils import (
     MAX_ABS_C,
     MAX_ABS_M,
@@ -40,14 +38,10 @@ def _run_single_sim(
         deep_noise_fac=deep_noise_fac,
         deep_psf_fac=deep_psf_fac,
     )
-    mcal_res = jax_metacal_wide_and_deep_psf_matched(
+    mcal_res = metacal_wide_and_deep_psf_matched(
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2 * jnp.pi / (53 * 0.2) / 4,
-        dk_d=2 * jnp.pi / (53 * 0.2) / 4,
-        nxy=53,
-        nxy_psf=53,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
     )
@@ -241,21 +235,14 @@ def _run_single_sim_maybe_mcal(
         obj_flux_factor=0.0 if zero_flux else 1.0,
     )
     if use_mcal:
-        mcal_res = jax_metacal_op_shears(
+        mcal_res = metacal_op_shears(
             obs_w,
-            dk=jnp.pi / (53 * 0.2) / 4,
         )
-        for key, value in mcal_res.items():
-            mcal_res[key] = NT_to_ngmix_obs(value)
     else:
-        mcal_res = jax_metacal_wide_and_deep_psf_matched(
+        mcal_res = metacal_wide_and_deep_psf_matched(
             obs_w,
             obs_d,
             obs_dn,
-            dk_w=jnp.pi / (53 * 0.2) / 4,
-            dk_d=jnp.pi / (53 * 0.2) / 4,
-            nxy=53,
-            nxy_psf=53,
         )
     return fit_gauss_mom_mcal_res(mcal_res), mcal_res
 

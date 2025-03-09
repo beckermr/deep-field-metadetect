@@ -9,7 +9,6 @@ from deep_field_metadetect.detect import (
     make_detection_coadd,
     run_detection_sep,
 )
-from deep_field_metadetect.observation import NT_to_ngmix_obs
 from deep_field_metadetect.utils import canned_viz_for_obs, make_simple_sim
 
 
@@ -43,7 +42,7 @@ def test_make_detection_coadd(detbands, has_bmask):
                 dim=100,
                 buff=20,
             )
-            obs = NT_to_ngmix_obs(obs)
+
             if has_bmask:
                 obs.bmask = rng.choice(
                     [0, 2**0, 2**5], size=obs.image.shape, p=[0.8, 0.1, 0.1]
@@ -136,7 +135,6 @@ def test_run_detection_sep():
         dim=100,
         buff=20,
     )
-    obs = NT_to_ngmix_obs(obs)
 
     detdata = run_detection_sep(obs)
     cat = detdata["catalog"]
@@ -168,7 +166,6 @@ def test_run_detection_sep_bmask():
         dim=100,
         buff=20,
     )
-    obs = NT_to_ngmix_obs(obs)
 
     bmask = np.zeros_like(obs.image, dtype=np.int32)
     bmask[:, 60:] = 2**1
@@ -220,7 +217,7 @@ def test_generate_mbobs_for_detections(has_bmask, has_psf):
                 dim=100,
                 buff=20,
             )
-            obs = NT_to_ngmix_obs(obs)
+
             if has_bmask:
                 obs.bmask = rng.choice(
                     [0, 2**0, 2**5], size=obs.image.shape, p=[0.8, 0.1, 0.1]
