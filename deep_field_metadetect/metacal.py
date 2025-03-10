@@ -1,8 +1,8 @@
-import galsim as galsim
+import galsim
 import ngmix
 import numpy as np
 
-DEFAULT_SHEARS = ("noshear", "1p", "1m", "2p", "2m")
+DEFAULT_SHEARS = ["noshear", "1p", "1m", "2p", "2m"]
 DEFAULT_STEP = 0.01
 
 

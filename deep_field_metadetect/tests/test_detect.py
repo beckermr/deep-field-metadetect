@@ -42,7 +42,6 @@ def test_make_detection_coadd(detbands, has_bmask):
                 dim=100,
                 buff=20,
             )
-
             if has_bmask:
                 obs.bmask = rng.choice(
                     [0, 2**0, 2**5], size=obs.image.shape, p=[0.8, 0.1, 0.1]
@@ -54,7 +53,6 @@ def test_make_detection_coadd(detbands, has_bmask):
             obs.weight = obs.weight * rng.choice(
                 [0, 1], size=obs.image.shape, p=[0.1, 0.9]
             )
-
             assert np.any(obs.weight == 0)
 
             obslist.append(obs)
@@ -217,7 +215,6 @@ def test_generate_mbobs_for_detections(has_bmask, has_psf):
                 dim=100,
                 buff=20,
             )
-
             if has_bmask:
                 obs.bmask = rng.choice(
                     [0, 2**0, 2**5], size=obs.image.shape, p=[0.8, 0.1, 0.1]
