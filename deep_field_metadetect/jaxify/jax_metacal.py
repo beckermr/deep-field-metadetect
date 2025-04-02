@@ -6,10 +6,11 @@ import jax.numpy as jnp
 import jax_galsim
 import numpy as np
 
-from deep_field_metadetect.jaxify.observation import NT_to_ngmix_obs, NTObservation
-
-DEFAULT_SHEARS = ("noshear", "1p", "1m", "2p", "2m")
-DEFAULT_STEP = 0.01
+from deep_field_metadetect.jaxify.observation import (
+    DFMdetObservation,
+    dfmd_obs_to_ngmix_obs,
+)
+from deep_field_metadetect.metacal import DEFAULT_SHEARS, DEFAULT_STEP
 
 
 def get_shear_tuple(shear, step):
@@ -27,7 +28,6 @@ def get_shear_tuple(shear, step):
         raise RuntimeError("Shear value '%s' not regonized!" % shear)
 
 
-# TODO: what should be the value to nxy?
 @partial(jax.jit, static_argnames=["dk", "nxy_psf"])
 def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux=1):
     """Gets the target reconvolution PSF for an input PSF object.
@@ -37,17 +37,21 @@ def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux
 
     Parameters
     ----------
-    psf : galsim object
-        The PSF.
-    flux : float
-        The output flux of the PSF. Defaults to 1.
+    psf : galsim.GSObject
+        The input point spread function (PSF) object.
+    dk : float
+        The Fourier-space pixel scale.
+    nxy_psf : int, optional
+        The size of the PSF image in pixels (default is 53).
+    step : float, optional
+        The step size for coordinate grids (default is `DEFAULT_STEP`).
+    flux : float, optional
+        The total flux of the output PSF (default is 1).
 
     Returns
     -------
-    reconv_psf : galsim object
+    reconv_psf : JaxGalsim object
         The reconvolution PSF.
-    sigma : float
-        The width of the reconv PSF befor dilation.
     """
     small_kval = 1.0e-2  # Find the k where the given psf hits this kvalue
     smaller_kval = 3.0e-3  # Target PSF will have this kvalue at the same k
@@ -71,9 +75,9 @@ def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux
 
 
 @partial(jax.jit, static_argnames=["dk", "nxy_psf"])
-def jax_get_gauss_reconv_psf(obs, nxy_psf, dk, step=DEFAULT_STEP):
-    """Get the Gaussian reconv PSF for an ngmix obs."""
-    psf = get_jax_galsim_object_from_NT_obs_nopix(obs.psf, kind="image")
+def jax_get_gauss_reconv_psf(dfmd_obs, nxy_psf, dk, step=DEFAULT_STEP):
+    """Get the Gaussian reconv PSF for a DFMdetObs."""
+    psf = get_jax_galsim_object_from_dfmd_obs_nopix(dfmd_obs.psf, kind="image")
     return jax_get_gauss_reconv_psf_galsim(psf, nxy_psf=nxy_psf, dk=dk, step=step)
 
 
@@ -85,47 +89,44 @@ def jax_get_max_gauss_reconv_psf_galsim(
     mc_psf_w = jax_get_gauss_reconv_psf_galsim(psf_w, dk_w, nxy_psf, step=step)
     mc_psf_d = jax_get_gauss_reconv_psf_galsim(psf_d, dk_d, nxy_psf, step=step)
 
-    # fwhm_w = jnp.asarray(mc_psf_w.fwhm)
-    # fwhm_d = jnp.asarray(mc_psf_d.fwhm)
-
     return jax.lax.cond(
         mc_psf_w.fwhm > mc_psf_d.fwhm, lambda: mc_psf_w, lambda: mc_psf_d
     )
 
 
 def jax_get_max_gauss_reconv_psf(obs_w, obs_d, dk_w, dk_d, nxy, step=DEFAULT_STEP):
-    """Get the larger of two reconv PSFs for two ngmix.Observations."""
-    psf_w = get_jax_galsim_object_from_NT_obs_nopix(obs_w.psf, kind="image")
-    psf_d = get_jax_galsim_object_from_NT_obs_nopix(obs_d.psf, kind="image")
+    """Get the larger of two reconv PSFs for two DFMdetObservations."""
+    psf_w = get_jax_galsim_object_from_dfmd_obs_nopix(obs_w.psf, kind="image")
+    psf_d = get_jax_galsim_object_from_dfmd_obs_nopix(obs_d.psf, kind="image")
     return jax_get_max_gauss_reconv_psf_galsim(psf_w, psf_d, dk_w, dk_d, nxy, step=step)
 
 
 @partial(jax.jit, static_argnames=["nxy_psf"])
-def _jax_render_psf_and_build_obs(image, obs, reconv_psf, nxy_psf, weight_fac=1):
+def _jax_render_psf_and_build_obs(image, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1):
     reconv_psf = reconv_psf.withGSParams(
         minimum_fft_size=nxy_psf * 4,
         maximum_fft_size=nxy_psf * 4,
     )
 
     pim = reconv_psf.drawImage(
-        nx=53,
-        ny=53,
-        wcs=obs.psf.jacobian,
+        nx=nxy_psf,
+        ny=nxy_psf,
+        wcs=dfmd_obs.psf.jacobian,
         offset=jax_galsim.PositionD(
-            x=obs.psf.jac_col0 + 1 - nxy_psf / 2,  # TODO: what is the size is odd?
-            y=obs.psf.jac_row0 + 1 - nxy_psf / 2,
+            x=dfmd_obs.psf.jac_col0 + 1 - nxy_psf / 2,  # TODO: what if the size is odd?
+            y=dfmd_obs.psf.jac_row0 + 1 - nxy_psf / 2,
         ),
     ).array
 
-    obs_psf = obs.psf._replace(image=pim)
-    return obs._replace(
-        image=jnp.array(image), psf=obs_psf, weight=obs.weight * weight_fac
+    obs_psf = dfmd_obs.psf._replace(image=pim)
+    return dfmd_obs._replace(
+        image=jnp.array(image), psf=obs_psf, weight=dfmd_obs.weight * weight_fac
     )
 
 
 @partial(jax.jit, static_argnames="dims")
 def _jax_metacal_op_g1g2_impl(*, wcs, image, noise, psf_inv, dims, reconv_psf, g1, g2):
-    """Run metacal on an ngmix observation.
+    """Run metacal on an dfmd observation.
 
     Note that the noise image should already be rotated by 90 degrees here.
     """
@@ -161,45 +162,47 @@ def _jax_metacal_op_g1g2_impl(*, wcs, image, noise, psf_inv, dims, reconv_psf, g
     return ims + ns
 
 
-def jax_metacal_op_g1g2(obs, reconv_psf, g1, g2, nxy_psf):
-    """Run metacal on an ngmix observation."""
+def jax_metacal_op_g1g2(dfmd_obs, reconv_psf, g1, g2, nxy_psf):
+    """Run metacal on an dfmd obs."""
     mcal_image = _jax_metacal_op_g1g2_impl(
-        wcs=obs.jacobian,
-        image=get_jax_galsim_object_from_NT_obs(obs, kind="image"),
+        wcs=dfmd_obs.jacobian,
+        image=get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind="image"),
         # we rotate by 90 degrees on the way in and then _metacal_op_g1g2_impl
         # rotates back after deconv and shearing
-        noise=get_jax_galsim_object_from_NT_obs(obs, kind="noise", rot90=1),
+        noise=get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind="noise", rot90=1),
         psf_inv=jax_galsim.Deconvolve(
-            get_jax_galsim_object_from_NT_obs(obs.psf, kind="image")
+            get_jax_galsim_object_from_dfmd_obs(dfmd_obs.psf, kind="image")
         ),
-        dims=obs.image.shape,
+        dims=dfmd_obs.image.shape,
         reconv_psf=reconv_psf,
         g1=g1,
         g2=g2,
     )
 
     return _jax_render_psf_and_build_obs(
-        mcal_image, obs, reconv_psf, nxy_psf=nxy_psf, weight_fac=0.5
+        mcal_image, dfmd_obs, reconv_psf, nxy_psf=nxy_psf, weight_fac=0.5
     )
 
 
 @partial(jax.jit, static_argnames=["nxy_psf", "dk", "shears"])
 def jax_metacal_op_shears(
-    obs, dk, nxy_psf=53, reconv_psf=None, shears=None, step=DEFAULT_STEP
+    dfmd_obs, dk, nxy_psf=53, reconv_psf=None, shears=None, step=DEFAULT_STEP
 ):
-    """Run metacal on an ngmix observation."""
+    """Run metacal on an dfmd observation."""
     if shears is None:
         shears = DEFAULT_SHEARS
 
     if reconv_psf is None:
-        reconv_psf = jax_get_gauss_reconv_psf(obs, dk=dk, nxy_psf=nxy_psf, step=step)
+        reconv_psf = jax_get_gauss_reconv_psf(
+            dfmd_obs, dk=dk, nxy_psf=nxy_psf, step=step
+        )
 
-    wcs = obs.jacobian
-    image = get_jax_galsim_object_from_NT_obs(obs, kind="image")
+    wcs = dfmd_obs.jacobian
+    image = get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind="image")
     # we rotate by 90 degrees on the way in and then _metacal_op_g1g2_impl
     # rotates back after deconv and shearing
-    noise = get_jax_galsim_object_from_NT_obs(obs, kind="noise", rot90=1)
-    psf = get_jax_galsim_object_from_NT_obs(obs.psf, kind="image")
+    noise = get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind="noise", rot90=1)
+    psf = get_jax_galsim_object_from_dfmd_obs(dfmd_obs.psf, kind="image")
     psf_inv = jax_galsim.Deconvolve(psf)
 
     mcal_res = {}
@@ -211,7 +214,7 @@ def jax_metacal_op_shears(
             image=image,
             noise=noise,
             psf_inv=psf_inv,
-            dims=obs.image.shape,
+            dims=dfmd_obs.image.shape,
             reconv_psf=reconv_psf,
             g1=g1,
             g2=g2,
@@ -219,7 +222,7 @@ def jax_metacal_op_shears(
 
         mcal_res[shear] = _jax_render_psf_and_build_obs(
             mcal_image,
-            obs,
+            dfmd_obs,
             reconv_psf,
             nxy_psf=nxy_psf,
             weight_fac=0.5,
@@ -227,25 +230,27 @@ def jax_metacal_op_shears(
     return mcal_res
 
 
-@partial(jax.jit, static_argnames=["nxy_psf"])
-def jax_match_psf(obs, reconv_psf, nxy_psf):
-    """Match the PSF on an ngmix observation to a new PSF."""
-    wcs = obs.jacobian
-    image = get_jax_galsim_object_from_NT_obs(obs, kind="image")
-    psf = get_jax_galsim_object_from_NT_obs(obs.psf, kind="image")
+@partial(jax.jit, static_argnames=["nxy", "nxy_psf"])
+def jax_match_psf(dfmd_obs, reconv_psf, nxy, nxy_psf):
+    """Match the PSF on an dfmd observation to a new PSF."""
+    wcs = dfmd_obs.jacobian
+    image = get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind="image")
+    psf = get_jax_galsim_object_from_dfmd_obs(dfmd_obs.psf, kind="image")
 
     ims = jax_galsim.Convolve([image, jax_galsim.Deconvolve(psf), reconv_psf])
 
     ims = ims.withGSParams(
-        minimum_fft_size=nxy_psf * 4,
-        maximum_fft_size=nxy_psf * 4,
+        minimum_fft_size=nxy * 4,
+        maximum_fft_size=nxy * 4,
     )
-    ims = ims.drawImage(nx=nxy_psf, ny=nxy_psf, wcs=wcs).array
+    ims = ims.drawImage(nx=nxy, ny=nxy, wcs=wcs).array
 
-    return _jax_render_psf_and_build_obs(ims, obs, reconv_psf, nxy_psf, weight_fac=1)
+    return _jax_render_psf_and_build_obs(
+        ims, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1
+    )
 
 
-def _extract_attr(obs, attr, dtype):
+def _extract_attr(obs, attr, dtype=jnp.float64):
     if getattr(obs, "has_" + attr)():
         return getattr(obs, attr)
     else:
@@ -253,47 +258,45 @@ def _extract_attr(obs, attr, dtype):
 
 
 @partial(jax.jit, static_argnames=["ignore_psf", "skip_mfrac_for_second"])
-def jax_add_ngmix_obs(
-    obs1, obs2, ignore_psf=False, skip_mfrac_for_second=False
-) -> NTObservation:
-    """Add two ngmix observations"""
+def jax_add_dfmd_obs(
+    dfmd_obs1, dfmd_obs2, ignore_psf=False, skip_mfrac_for_second=False
+) -> DFMdetObservation:
+    """Add two dfmd observations"""
 
-    if repr(obs1.jacobian) != repr(obs2.jacobian):
+    if repr(dfmd_obs1.jacobian) != repr(dfmd_obs2.jacobian):
         raise RuntimeError(
-            "Jacobians must be equal to add ngmix observations! %s != %s"
-            % (repr(obs1.jacobian), repr(obs2.jacobian)),
+            "Jacobians must be equal to add dfmd observations! %s != %s"
+            % (repr(dfmd_obs1.jacobian), repr(dfmd_obs2.jacobian)),
         )
 
-    if obs1.image.shape != obs2.image.shape:
+    if dfmd_obs1.image.shape != dfmd_obs2.image.shape:
         raise RuntimeError(
-            "Image shapes must be equal to add ngmix observations! %s != %s"
+            "Image shapes must be equal to add dfmd observations! %s != %s"
             % (
-                obs1.image.shape,
-                obs2.image.shape,
+                dfmd_obs1.image.shape,
+                dfmd_obs2.image.shape,
             ),
         )
 
-    if obs1.has_psf() != obs2.has_psf() and not ignore_psf:
+    if dfmd_obs1.has_psf() != dfmd_obs2.has_psf() and not ignore_psf:
         raise RuntimeError(
             "Observations must both either have or not have a "
             "PSF to add them. %s != %s"
             % (
-                obs1.has_psf(),
-                obs2.has_psf(),
+                dfmd_obs1.has_psf(),
+                dfmd_obs2.has_psf(),
             ),
         )
 
-    if obs1.has_psf() and obs2.has_psf() and not ignore_psf:
+    if dfmd_obs1.has_psf() and dfmd_obs2.has_psf() and not ignore_psf:
         # We ignore the PSF in this call since PSFs do not have PSFs
-        # if nxy_psf is None:
-        #     raise ValueError("Provide the psf size nxy_psf")
-        new_psf = jax_add_ngmix_obs(obs1.psf, obs2.psf, ignore_psf=True)
+        new_psf = jax_add_dfmd_obs(dfmd_obs1.psf, dfmd_obs2.psf, ignore_psf=True)
     else:
         new_psf = None
 
     new_wgt = jnp.where(
-        (obs1.weight > 0) & (obs2.weight > 0),
-        1 / (1 / obs1.weight + 1 / obs2.weight),
+        (dfmd_obs1.weight > 0) & (dfmd_obs2.weight > 0),
+        1 / (1 / dfmd_obs1.weight + 1 / dfmd_obs2.weight),
         0,
     )
 
@@ -303,77 +306,76 @@ def jax_add_ngmix_obs(
     new_mfrac = None
     new_meta_data = {}
 
-    if obs1.has_bmask() or obs2.has_bmask():
-        new_bmask = _extract_attr(obs1, "bmask", np.int32) | _extract_attr(
-            obs2, "bmask", jnp.int32
+    if dfmd_obs1.has_bmask() or dfmd_obs2.has_bmask():
+        new_bmask = _extract_attr(dfmd_obs1, "bmask", jnp.int32) | _extract_attr(
+            dfmd_obs2, "bmask", jnp.int32
         )
 
-    if obs1.has_ormask() or obs2.has_ormask():
-        new_ormask = _extract_attr(obs1, "ormask", np.int32) | _extract_attr(
-            obs2, "ormask", jnp.int32
+    if dfmd_obs1.has_ormask() or dfmd_obs2.has_ormask():
+        new_ormask = _extract_attr(dfmd_obs1, "ormask", jnp.int32) | _extract_attr(
+            dfmd_obs2, "ormask", jnp.int32
         )
 
-    if obs1.has_noise() or obs2.has_noise():
-        new_noise = _extract_attr(obs1, "noise", np.float32) + _extract_attr(
-            obs2, "noise", jnp.float32
+    if dfmd_obs1.has_noise() or dfmd_obs2.has_noise():
+        new_noise = _extract_attr(dfmd_obs1, "noise") + _extract_attr(
+            dfmd_obs2, "noise"
         )
 
     if skip_mfrac_for_second:
-        if obs1.has_mfrac():
-            new_mfrac = _extract_attr(obs1, "mfrac", np.float32)
+        if dfmd_obs1.has_mfrac():
+            new_mfrac = _extract_attr(dfmd_obs1, "mfrac")
     else:
-        if obs1.has_mfrac() or obs2.has_mfrac():
+        if dfmd_obs1.has_mfrac() or dfmd_obs2.has_mfrac():
             new_mfrac = (
-                _extract_attr(obs1, "mfrac", np.float32)
-                + _extract_attr(obs2, "mfrac", np.float32)
-            ) / 2  # TODO: update statement
+                _extract_attr(dfmd_obs1, "mfrac") + _extract_attr(dfmd_obs2, "mfrac")
+            ) / 2
 
-    new_meta_data.update(obs1.meta)
-    new_meta_data.update(obs2.meta)
+    new_meta_data.update(dfmd_obs1.meta)
+    new_meta_data.update(dfmd_obs2.meta)
 
-    obs = NTObservation(
-        image=obs1.image + obs2.image,
+    obs = DFMdetObservation(
+        image=dfmd_obs1.image + dfmd_obs2.image,
         weight=new_wgt,
         bmask=new_bmask,
         ormask=new_ormask,
         noise=new_noise,
         jacobian=jax_galsim.wcs.JacobianWCS(
-            dudx=obs1.jacobian.dudx,
-            dudy=obs1.jacobian.dudy,
-            dvdx=obs1.jacobian.dvdx,
-            dvdy=obs1.jacobian.dvdy,
+            dudx=dfmd_obs1.jacobian.dudx,
+            dudy=dfmd_obs1.jacobian.dudy,
+            dvdx=dfmd_obs1.jacobian.dvdx,
+            dvdy=dfmd_obs1.jacobian.dvdy,
         ),
         psf=new_psf,
         meta=new_meta_data,  # Directly copy metadata
         mfrac=new_mfrac,
-        store_pixels=getattr(obs1, "store_pixels", True),
-        ignore_zero_weight=getattr(obs1, "ignore_zero_weight", True),
-        jac_row0=obs1.jac_row0,
-        jac_col0=obs1.jac_col0,
-        jac_det=obs1.jac_det,
-        jac_scale=obs1.jac_scale,
+        store_pixels=getattr(dfmd_obs1, "store_pixels", True),
+        ignore_zero_weight=getattr(dfmd_obs1, "ignore_zero_weight", True),
+        jac_row0=dfmd_obs1.jac_row0,
+        jac_col0=dfmd_obs1.jac_col0,
+        jac_det=dfmd_obs1.jac_det,
+        jac_scale=dfmd_obs1.jac_scale,
     )
 
     return obs
 
 
-def get_jax_galsim_object_from_NT_obs(obs, kind="image", rot90=0):
-    """Make an interpolated image from an ngmix obs."""
+def get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind="image", rot90=0):
+    """Make an interpolated image from an dfmd obs."""
     return jax_galsim.InterpolatedImage(
         jax_galsim.ImageD(
-            jnp.rot90(getattr(obs, kind).copy(), k=rot90),
-            wcs=obs.jacobian,
+            jnp.rot90(getattr(dfmd_obs, kind).copy(), k=rot90),
+            wcs=dfmd_obs.jacobian,
         ),
         x_interpolant="lanczos15",
     )
 
 
-def get_jax_galsim_object_from_NT_obs_nopix(obs, kind="image"):
-    """Make an interpolated image from an ngmix obs w/o a pixel."""
-    wcs = obs.jacobian
+def get_jax_galsim_object_from_dfmd_obs_nopix(dfmd_obs, kind="image"):
+    """Make an interpolated image from an DFMdet obs w/o a pixel."""
+    wcs = dfmd_obs.jacobian
     return jax_galsim.Convolve(
         [
-            get_jax_galsim_object_from_NT_obs(obs, kind=kind),
+            get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind=kind),
             jax_galsim.Deconvolve(wcs.toWorld(jax_galsim.Pixel(scale=1))),
         ]
     )
@@ -391,7 +393,7 @@ def get_jax_galsim_object_from_NT_obs_nopix(obs, kind="image"):
         "return_noshear_deep",
     ],
 )
-def jax_helper_metacal_wide_and_deep_psf_matched(
+def _jax_helper_metacal_wide_and_deep_psf_matched(
     obs_wide,
     obs_deep,
     obs_deep_noise,
@@ -409,21 +411,19 @@ def jax_helper_metacal_wide_and_deep_psf_matched(
 
     # make the wide obs
     if skip_obs_wide_corrections:
-        mcal_obs_wide = jax_match_psf(obs_wide, reconv_psf, nxy)
+        mcal_obs_wide = jax_match_psf(obs_wide, reconv_psf, nxy, nxy_psf)
     else:
-        mcal_obs_wide = jax_add_ngmix_obs(
-            jax_match_psf(obs_wide, reconv_psf, nxy),
+        mcal_obs_wide = jax_add_dfmd_obs(
+            jax_match_psf(obs_wide, reconv_psf, nxy, nxy_psf),
             jax_metacal_op_g1g2(obs_deep_noise, reconv_psf, 0, 0, nxy_psf=nxy_psf),
             skip_mfrac_for_second=True,
         )
 
     # get PSF matched noise
-    # obs_wide_noise = obs_wide.copy()
     obs_wide_noise = obs_wide._replace(image=obs_wide.noise)
-    wide_noise_corr = jax_match_psf(obs_wide_noise, reconv_psf, nxy)
+    wide_noise_corr = jax_match_psf(obs_wide_noise, reconv_psf, nxy, nxy_psf)
 
     # now run mcal on deep
-    # jax_gal_reconv_psf = get_jax_galsim_object_from_ngmix_obs_nopix(reconv_psf)
     mcal_res = jax_metacal_op_shears(
         obs_deep,
         dk=reconv_psf_dk,
@@ -436,7 +436,7 @@ def jax_helper_metacal_wide_and_deep_psf_matched(
     # now add in noise corr to make it match the wide noise
     if not skip_obs_deep_corrections:
         for k in mcal_res:
-            mcal_res[k] = jax_add_ngmix_obs(
+            mcal_res[k] = jax_add_dfmd_obs(
                 mcal_res[k],
                 wide_noise_corr,
                 skip_mfrac_for_second=True,
@@ -470,7 +470,7 @@ def jax_metacal_wide_and_deep_psf_matched(
     # first get the biggest reconv PSF of the two
     reconv_psf = jax_get_max_gauss_reconv_psf(obs_wide, obs_deep, dk_w, dk_d, nxy)
 
-    mcal_res = jax_helper_metacal_wide_and_deep_psf_matched(
+    mcal_res = _jax_helper_metacal_wide_and_deep_psf_matched(
         obs_wide=obs_wide,
         obs_deep=obs_deep,
         obs_deep_noise=obs_deep_noise,
@@ -486,7 +486,7 @@ def jax_metacal_wide_and_deep_psf_matched(
     )
 
     for k in mcal_res:
-        mcal_res[k] = NT_to_ngmix_obs(mcal_res[k])
+        mcal_res[k] = dfmd_obs_to_ngmix_obs(mcal_res[k])
         mcal_res[k].psf.galsim_obj = reconv_psf
 
     return mcal_res

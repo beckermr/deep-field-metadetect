@@ -9,14 +9,14 @@ from ngmix.observation import Observation
 
 
 @jax.tree_util.register_pytree_node_class
-class NTObservation(NamedTuple):
+class DFMdetObservation(NamedTuple):
     image: jax.Array
     weight: Optional[jax.Array]
     bmask: Optional[jax.Array]
     ormask: Optional[jax.Array]
     noise: Optional[jax.Array]
     jacobian: Optional[jax.Array]
-    psf: Optional["NTObservation"]
+    psf: Optional["DFMdetObservation"]
     mfrac: Optional[jax.Array]
     jac_row0: Optional[float]
     jac_col0: Optional[float]
@@ -77,14 +77,14 @@ class NTObservation(NamedTuple):
         return True
 
 
-def ngmix_Obs_to_NT(obs: ngmix.observation.Observation) -> NTObservation:
+def ngmix_obs_to_dfmd_obs(obs: ngmix.observation.Observation) -> DFMdetObservation:
     jacobian = obs.get_jacobian()
 
     psf = None
     if obs.has_psf():
-        psf = ngmix_Obs_to_NT(obs.get_psf())
+        psf = ngmix_obs_to_dfmd_obs(obs.get_psf())
 
-    return NTObservation(
+    return DFMdetObservation(
         image=jax.numpy.array(obs.image),
         weight=jax.numpy.array(obs.weight),
         bmask=jax.numpy.array(obs.bmask) if obs.has_bmask() else None,
@@ -103,29 +103,29 @@ def ngmix_Obs_to_NT(obs: ngmix.observation.Observation) -> NTObservation:
     )
 
 
-def NT_to_ngmix_obs(nt_obs) -> Observation:
+def dfmd_obs_to_ngmix_obs(dfmd_obs) -> Observation:
     psf = None
-    if nt_obs.psf is not None:
-        psf = NT_to_ngmix_obs(nt_obs.psf)
+    if dfmd_obs.psf is not None:
+        psf = dfmd_obs_to_ngmix_obs(dfmd_obs.psf)
     return Observation(
-        image=np.array(nt_obs.image),
-        weight=np.array(nt_obs.weight),
-        bmask=nt_obs.bmask,
-        ormask=nt_obs.ormask,
-        noise=nt_obs.noise if nt_obs.noise is None else np.array(nt_obs.noise),
+        image=np.array(dfmd_obs.image),
+        weight=np.array(dfmd_obs.weight),
+        bmask=dfmd_obs.bmask,
+        ormask=dfmd_obs.ormask,
+        noise=dfmd_obs.noise if dfmd_obs.noise is None else np.array(dfmd_obs.noise),
         jacobian=Jacobian(
-            row=nt_obs.jac_row0,
-            col=nt_obs.jac_col0,
-            dudrow=nt_obs.jacobian.dudx,
-            dudcol=nt_obs.jacobian.dudy,
-            dvdrow=nt_obs.jacobian.dvdx,
-            dvdcol=nt_obs.jacobian.dvdy,
-            det=nt_obs.jac_det,
-            scale=nt_obs.jac_scale,
+            row=dfmd_obs.jac_row0,
+            col=dfmd_obs.jac_col0,
+            dudrow=dfmd_obs.jacobian.dudx,
+            dudcol=dfmd_obs.jacobian.dudy,
+            dvdrow=dfmd_obs.jacobian.dvdx,
+            dvdcol=dfmd_obs.jacobian.dvdy,
+            det=dfmd_obs.jac_det,
+            scale=dfmd_obs.jac_scale,
         ),
         psf=psf,
-        mfrac=nt_obs.mfrac if nt_obs.mfrac is None else np.array(nt_obs.mfrac),
-        meta=nt_obs.meta,
-        store_pixels=np.array(nt_obs.store_pixels, dtype=np.bool_),
-        ignore_zero_weight=np.array(nt_obs.ignore_zero_weight, dtype=np.bool_),
+        mfrac=dfmd_obs.mfrac if dfmd_obs.mfrac is None else np.array(dfmd_obs.mfrac),
+        meta=dfmd_obs.meta,
+        store_pixels=np.array(dfmd_obs.store_pixels, dtype=np.bool_),
+        ignore_zero_weight=np.array(dfmd_obs.ignore_zero_weight, dtype=np.bool_),
     )

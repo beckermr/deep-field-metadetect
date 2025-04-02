@@ -10,9 +10,9 @@ import numpy as np
 from ngmix.gaussmom import GaussMom
 
 from deep_field_metadetect.jaxify.observation import (
-    NT_to_ngmix_obs,
-    NTObservation,
-    ngmix_Obs_to_NT,
+    DFMdetObservation,
+    dfmd_obs_to_ngmix_obs,
+    ngmix_obs_to_dfmd_obs,
 )
 from deep_field_metadetect.metacal import DEFAULT_SHEARS
 
@@ -306,8 +306,8 @@ def fit_gauss_mom_mcal_res(mcal_res, fwhm=1.2):
     fitter = GaussMom(fwhm)
 
     psf = mcal_res["noshear"].psf
-    if isinstance(psf, NTObservation):
-        psf = NT_to_ngmix_obs(mcal_res["noshear"].psf)
+    if isinstance(psf, DFMdetObservation):
+        psf = dfmd_obs_to_ngmix_obs(mcal_res["noshear"].psf)
 
     psf_res = fitter.go(psf)
 
@@ -321,8 +321,8 @@ def fit_gauss_mom_mcal_res(mcal_res, fwhm=1.2):
 
         vals["wmom_psf_T"][i] = psf_res["T"]
 
-        if isinstance(obs, NTObservation):
-            obs = NT_to_ngmix_obs(obs)
+        if isinstance(obs, DFMdetObservation):
+            obs = dfmd_obs_to_ngmix_obs(obs)
         res = fitter.go(obs)
 
         vals["wmom_flags"][i] = res["flags"]
@@ -602,7 +602,7 @@ def make_simple_sim(
     dim_psf=53,
     buff=26,
     obj_flux_factor=1,
-    return_NT=False,
+    return_dfmd_obs=False,
 ):
     """Make a simple simulation for testing deep-field metadetection.
 
@@ -711,11 +711,11 @@ def make_simple_sim(
         dim=dim,
         dim_psf=dim_psf,
     )
-    if return_NT:
+    if return_dfmd_obs:
         return (
-            ngmix_Obs_to_NT(obs_wide),
-            ngmix_Obs_to_NT(obs_deep),
-            ngmix_Obs_to_NT(obs_deep_noise),
+            ngmix_obs_to_dfmd_obs(obs_wide),
+            ngmix_obs_to_dfmd_obs(obs_deep),
+            ngmix_obs_to_dfmd_obs(obs_deep_noise),
         )
 
     return obs_wide, obs_deep, obs_deep_noise

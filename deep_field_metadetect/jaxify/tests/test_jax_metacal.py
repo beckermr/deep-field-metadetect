@@ -16,17 +16,22 @@ from deep_field_metadetect.utils import (
 
 
 def _run_single_sim_pair(seed, s2n):
+    nxy = 53
+    nxy_psf = 53
+    scale = 0.2
     obs_plus, *_ = make_simple_sim(
         seed=seed,
         g1=0.02,
         g2=0.0,
         s2n=s2n,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
         deep_noise_fac=1.0 / np.sqrt(10),
         deep_psf_fac=1.0,
-        return_NT=True,
+        return_dfmd_obs=True,
     )
-    # jax_gal_psf = get_jax_galsim_object_from_NT_obs_nopix(obs_plus.psf)
-    mcal_res = jax_metacal_op_shears(obs_plus, dk=2 * jnp.pi / (53 * 0.2) / 4)
+    mcal_res = jax_metacal_op_shears(obs_plus, dk=2 * jnp.pi / (nxy_psf * scale) / 4)
     res_p = fit_gauss_mom_mcal_res(mcal_res)
     res_p = measure_mcal_shear_quants(res_p)
 
@@ -35,12 +40,14 @@ def _run_single_sim_pair(seed, s2n):
         g1=-0.02,
         g2=0.0,
         s2n=s2n,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
         deep_noise_fac=1.0 / np.sqrt(10),
         deep_psf_fac=1.0,
-        return_NT=True,
+        return_dfmd_obs=True,
     )
-    # jax_gal_psf = get_jax_galsim_object_from_NT_obs_nopix(obs_minus.psf)
-    mcal_res = jax_metacal_op_shears(obs_minus, dk=2 * jnp.pi / (53 * 0.2) / 4)
+    mcal_res = jax_metacal_op_shears(obs_minus, dk=2 * jnp.pi / (nxy_psf * scale) / 4)
     res_m = fit_gauss_mom_mcal_res(mcal_res)
     res_m = measure_mcal_shear_quants(res_m)
 
@@ -55,17 +62,14 @@ def test_metacal_smoke():
 
 
 def test_metacal():
-    nsims = 5
+    nsims = 50
 
     rng = np.random.RandomState(seed=34132)
     seeds = rng.randint(size=nsims, low=1, high=2**29)
-    # jobs = [joblib.delayed(_run_single_sim_pair)(seed, 1e8) for seed in seeds]
-    # outputs = joblib.Parallel(n_jobs=-1, verbose=10)(jobs)
     res_p = []
     res_m = []
     for seed in seeds:
         res = _run_single_sim_pair(seed, 1e8)
-        # for res in outputs:
         if res is not None:
             res_p.append(res[0])
             res_m.append(res[1])
@@ -95,11 +99,8 @@ def test_metacal_slow():  # pragma: no cover
     loc = 0
     for chunk in range(nchunks):
         _seeds = seeds[loc : loc + chunk_size]
-        # jobs = [joblib.delayed(_run_single_sim_pair)(seed, 20) for seed in _seeds]
-        # outputs = joblib.Parallel(n_jobs=-1, verbose=10)(jobs)
         for seed in _seeds:
             res = _run_single_sim_pair(seed, 20)
-            # for res in outputs:
             if res is not None:
                 res_p.append(res[0])
                 res_m.append(res[1])
