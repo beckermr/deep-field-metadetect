@@ -16,7 +16,6 @@ dependencies:
   - ngmix
   - numba
   - numpy
-  - dm-tree
   - pip:
     - git+https://github.com/GalSim-developers/JAX-GalSim.git@main
 

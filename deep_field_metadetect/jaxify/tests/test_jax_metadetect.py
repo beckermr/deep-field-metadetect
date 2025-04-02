@@ -29,6 +29,9 @@ def _run_single_sim(
     skip_wide,
     skip_deep,
 ):
+    nxy = 201
+    nxy_psf = 53
+    scale = 0.2
     obs_w, obs_d, obs_dn = make_simple_sim(
         seed=seed,
         g1=g1,
@@ -36,11 +39,12 @@ def _run_single_sim(
         s2n=s2n,
         deep_noise_fac=deep_noise_fac,
         deep_psf_fac=deep_psf_fac,
-        dim=201,
-        dim_psf=53,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
         buff=25,
         n_objs=10,
-        return_NT=True,
+        return_dfmd_obs=True,
     )
     if False:  # pragma: no cover
         fig, *_ = canned_viz_for_obs(obs_w, "obs_w")
@@ -53,10 +57,10 @@ def _run_single_sim(
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2 * jnp.pi / (53 * 0.2) / 4,
-        dk_d=2 * jnp.pi / (53 * 0.2) / 4,
-        nxy=201,
-        nxy_psf=53,
+        dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
+        dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
+        nxy=nxy,
+        nxy_psf=nxy_psf,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
     )
@@ -97,6 +101,10 @@ def test_metadetect_single_band_deep_field_metadetect_smoke():
 
 
 def test_metadetect_single_band_deep_field_metadetect_bmask():
+    nxy = 201
+    nxy_psf = 53
+    scale = 0.2
+
     rng = np.random.RandomState(seed=1234)
     obs_w, obs_d, obs_dn = make_simple_sim(
         seed=1234,
@@ -105,10 +113,12 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
         s2n=1000,
         deep_noise_fac=1.0 / np.sqrt(10),
         deep_psf_fac=1,
-        dim=201,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
         buff=25,
         n_objs=10,
-        return_NT=True,
+        return_dfmd_obs=True,
     )
     obs_w = obs_w._replace(
         bmask=rng.choice([0, 1, 3], p=[0.5, 0.25, 0.25], size=obs_w.image.shape)
@@ -118,10 +128,10 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2 * jnp.pi / (53 * 0.2) / 4,
-        dk_d=2 * jnp.pi / (53 * 0.2) / 4,
-        nxy=201,
-        nxy_psf=53,
+        dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
+        dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
+        nxy=nxy,
+        nxy_psf=nxy_psf,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
     )
@@ -141,6 +151,9 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
 
 
 def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
+    nxy = 201
+    nxy_psf = 53
+    scale = 0.2
     rng = np.random.RandomState(seed=1234)
     obs_w, obs_d, obs_dn = make_simple_sim(
         seed=1234,
@@ -149,10 +162,12 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
         s2n=1000,
         deep_noise_fac=1.0 / np.sqrt(10),
         deep_psf_fac=1,
-        dim=201,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
         buff=25,
         n_objs=10,
-        return_NT=True,
+        return_dfmd_obs=True,
     )
     obs_w = obs_w._replace(mfrac=rng.uniform(0.5, 0.7, size=obs_w.image.shape))
 
@@ -160,10 +175,10 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2 * jnp.pi / (53 * 0.2) / 4,
-        dk_d=2 * jnp.pi / (53 * 0.2) / 4,
-        nxy=201,
-        nxy_psf=53,
+        dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
+        dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
+        nxy=nxy,
+        nxy_psf=nxy_psf,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
     )
@@ -177,6 +192,9 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
 
 
 def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
+    nxy = 201
+    nxy_psf = 53
+    scale = 0.2
     rng = np.random.RandomState(seed=1234)
     obs_w, obs_d, obs_dn = make_simple_sim(
         seed=1234,
@@ -185,10 +203,12 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
         s2n=1000,
         deep_noise_fac=1.0 / np.sqrt(10),
         deep_psf_fac=1,
-        dim=201,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
         buff=25,
         n_objs=10,
-        return_NT=True,
+        return_dfmd_obs=True,
     )
     obs_d = obs_d._replace(mfrac=rng.uniform(0.5, 0.7, size=obs_w.image.shape))
 
@@ -196,10 +216,10 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2 * jnp.pi / (53 * 0.2) / 4,
-        dk_d=2 * jnp.pi / (53 * 0.2) / 4,
-        nxy=201,
-        nxy_psf=53,
+        dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
+        dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
+        nxy=nxy,
+        nxy_psf=nxy_psf,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
     )

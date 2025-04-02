@@ -8,7 +8,7 @@ from deep_field_metadetect.jaxify.jax_metacal import (
     jax_metacal_op_shears,
     jax_metacal_wide_and_deep_psf_matched,
 )
-from deep_field_metadetect.jaxify.observation import NT_to_ngmix_obs
+from deep_field_metadetect.jaxify.observation import dfmd_obs_to_ngmix_obs
 from deep_field_metadetect.utils import (
     MAX_ABS_C,
     MAX_ABS_M,
@@ -31,21 +31,28 @@ def _run_single_sim(
     skip_wide,
     skip_deep,
 ):
+    nxy = 53
+    nxy_psf = 53
+    scale = 0.2
+
     obs_w, obs_d, obs_dn = make_simple_sim(
         seed=seed,
         g1=g1,
         g2=g2,
         s2n=s2n,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
         deep_noise_fac=deep_noise_fac,
         deep_psf_fac=deep_psf_fac,
-        return_NT=True,
+        return_dfmd_obs=True,
     )
     mcal_res = jax_metacal_wide_and_deep_psf_matched(
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2 * jnp.pi / (53 * 0.2) / 4,
-        dk_d=2 * jnp.pi / (53 * 0.2) / 4,
+        dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
+        dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
         nxy=53,
         nxy_psf=53,
         skip_obs_wide_corrections=skip_wide,
@@ -164,13 +171,6 @@ def test_deep_metacal_slow(skip_wide, skip_deep):  # pragma: no cover
     loc = 0
     for chunk in range(nchunks):
         _seeds = seeds[loc : loc + chunk_size]
-        # jobs = [
-        #     joblib.delayed(_run_sim_pair)(
-        #         seed, s2n, noise_fac, 0.8, skip_wide, skip_deep
-        #     )
-        #     for seed in _seeds
-        # ]
-        # outputs = joblib.Parallel(n_jobs=-1, verbose=10)(jobs)
         for seed in _seeds:
             res = _run_sim_pair(seed, s2n, noise_fac, 0.8, skip_wide, skip_deep)
             if res is not None:
@@ -224,32 +224,38 @@ def _run_single_sim_maybe_mcal(
     use_mcal,
     zero_flux,
 ):
+    nxy = 53
+    nxy_psf = 53
+    scale = 0.2
     obs_w, obs_d, obs_dn = make_simple_sim(
         seed=seed,
         g1=g1,
         g2=g2,
         s2n=s2n,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
         deep_noise_fac=deep_noise_fac,
         deep_psf_fac=deep_psf_fac,
         obj_flux_factor=0.0 if zero_flux else 1.0,
-        return_NT=True,
+        return_dfmd_obs=True,
     )
     if use_mcal:
         mcal_res = jax_metacal_op_shears(
             obs_w,
-            dk=jnp.pi / (53 * 0.2) / 4,
+            dk=jnp.pi / (nxy_psf * scale) / 4,
         )
         for key, value in mcal_res.items():
-            mcal_res[key] = NT_to_ngmix_obs(value)
+            mcal_res[key] = dfmd_obs_to_ngmix_obs(value)
     else:
         mcal_res = jax_metacal_wide_and_deep_psf_matched(
             obs_w,
             obs_d,
             obs_dn,
-            dk_w=jnp.pi / (53 * 0.2) / 4,
-            dk_d=jnp.pi / (53 * 0.2) / 4,
-            nxy=53,
-            nxy_psf=53,
+            dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
+            dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
+            nxy=nxy,
+            nxy_psf=nxy_psf,
         )
     return fit_gauss_mom_mcal_res(mcal_res), mcal_res
 
