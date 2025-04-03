@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import jax_galsim
 import numpy as np
 
+from deep_field_metadetect.jaxify.jax_utils import compute_stepk
 from deep_field_metadetect.jaxify.observation import (
     DFMdetObservation,
     dfmd_obs_to_ngmix_obs,
@@ -81,24 +82,28 @@ def jax_get_gauss_reconv_psf(dfmd_obs, nxy_psf, dk, step=DEFAULT_STEP):
     return jax_get_gauss_reconv_psf_galsim(psf, nxy_psf=nxy_psf, dk=dk, step=step)
 
 
-@partial(jax.jit, static_argnames=["dk_w", "dk_d", "nxy_psf"])
+@partial(jax.jit, static_argnames=["nxy_psf", "scale"])
 def jax_get_max_gauss_reconv_psf_galsim(
-    psf_w, psf_d, dk_w, dk_d, nxy_psf, step=DEFAULT_STEP
+    psf_w, psf_d, nxy_psf, scale=0.2, step=DEFAULT_STEP
 ):
     """Get the larger of two Gaussian reconvolution PSFs for two galsim objects."""
-    mc_psf_w = jax_get_gauss_reconv_psf_galsim(psf_w, dk_w, nxy_psf, step=step)
-    mc_psf_d = jax_get_gauss_reconv_psf_galsim(psf_d, dk_d, nxy_psf, step=step)
+    dk = compute_stepk(pixel_scale=scale, image_size=nxy_psf)
+    mc_psf_w = jax_get_gauss_reconv_psf_galsim(psf_w, dk, nxy_psf, step=step)
+    mc_psf_d = jax_get_gauss_reconv_psf_galsim(psf_d, dk, nxy_psf, step=step)
 
     return jax.lax.cond(
         mc_psf_w.fwhm > mc_psf_d.fwhm, lambda: mc_psf_w, lambda: mc_psf_d
     )
 
 
-def jax_get_max_gauss_reconv_psf(obs_w, obs_d, dk_w, dk_d, nxy, step=DEFAULT_STEP):
+@partial(jax.jit, static_argnames=["scale", "nxy_psf"])
+def jax_get_max_gauss_reconv_psf(obs_w, obs_d, nxy_psf, scale=0.2, step=DEFAULT_STEP):
     """Get the larger of two reconv PSFs for two DFMdetObservations."""
     psf_w = get_jax_galsim_object_from_dfmd_obs_nopix(obs_w.psf, kind="image")
     psf_d = get_jax_galsim_object_from_dfmd_obs_nopix(obs_d.psf, kind="image")
-    return jax_get_max_gauss_reconv_psf_galsim(psf_w, psf_d, dk_w, dk_d, nxy, step=step)
+    return jax_get_max_gauss_reconv_psf_galsim(
+        psf_w, psf_d, nxy_psf, scale=scale, step=step
+    )
 
 
 @partial(jax.jit, static_argnames=["nxy_psf"])
@@ -184,17 +189,26 @@ def jax_metacal_op_g1g2(dfmd_obs, reconv_psf, g1, g2, nxy_psf):
     )
 
 
-@partial(jax.jit, static_argnames=["nxy_psf", "dk", "shears"])
+@partial(jax.jit, static_argnames=["nxy_psf", "scale", "shears"])
 def jax_metacal_op_shears(
-    dfmd_obs, dk, nxy_psf=53, reconv_psf=None, shears=None, step=DEFAULT_STEP
+    dfmd_obs,
+    nxy_psf=53,
+    reconv_psf=None,
+    shears=None,
+    step=DEFAULT_STEP,
+    scale=0.2,
 ):
     """Run metacal on an dfmd observation."""
     if shears is None:
         shears = DEFAULT_SHEARS
 
+    dk = compute_stepk(pixel_scale=scale, image_size=nxy_psf)
     if reconv_psf is None:
         reconv_psf = jax_get_gauss_reconv_psf(
-            dfmd_obs, dk=dk, nxy_psf=nxy_psf, step=step
+            dfmd_obs,
+            dk=dk,
+            nxy_psf=nxy_psf,
+            step=step,
         )
 
     wcs = dfmd_obs.jacobian
@@ -386,11 +400,11 @@ def get_jax_galsim_object_from_dfmd_obs_nopix(dfmd_obs, kind="image"):
     static_argnames=[
         "nxy",
         "nxy_psf",
-        "reconv_psf_dk",
         "shears",
         "skip_obs_wide_corrections",
         "skip_obs_deep_corrections",
         "return_noshear_deep",
+        "scale",
     ],
 )
 def _jax_helper_metacal_wide_and_deep_psf_matched(
@@ -400,12 +414,12 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
     reconv_psf,
     nxy,
     nxy_psf,
-    reconv_psf_dk,
     shears=None,
     step=DEFAULT_STEP,
     skip_obs_wide_corrections=False,
     skip_obs_deep_corrections=False,
     return_noshear_deep=False,
+    scale=0.2,
 ):
     """Do metacalibration for a combination of wide+deep datasets."""
 
@@ -426,11 +440,11 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
     # now run mcal on deep
     mcal_res = jax_metacal_op_shears(
         obs_deep,
-        dk=reconv_psf_dk,
         reconv_psf=reconv_psf,
         shears=shears,
         step=step,
         nxy_psf=nxy_psf,
+        scale=scale,
     )
 
     # now add in noise corr to make it match the wide noise
@@ -455,8 +469,6 @@ def jax_metacal_wide_and_deep_psf_matched(
     obs_wide,
     obs_deep,
     obs_deep_noise,
-    dk_w,
-    dk_d,
     nxy,
     nxy_psf,
     shears=None,
@@ -464,11 +476,12 @@ def jax_metacal_wide_and_deep_psf_matched(
     skip_obs_wide_corrections=False,
     skip_obs_deep_corrections=False,
     return_noshear_deep=False,
+    scale=0.2,
 ):
     """Do metacalibration for a combination of wide+deep datasets."""
 
     # first get the biggest reconv PSF of the two
-    reconv_psf = jax_get_max_gauss_reconv_psf(obs_wide, obs_deep, dk_w, dk_d, nxy)
+    reconv_psf = jax_get_max_gauss_reconv_psf(obs_wide, obs_deep, nxy, scale)
 
     mcal_res = _jax_helper_metacal_wide_and_deep_psf_matched(
         obs_wide=obs_wide,
@@ -477,12 +490,12 @@ def jax_metacal_wide_and_deep_psf_matched(
         reconv_psf=reconv_psf,
         nxy=nxy,
         nxy_psf=nxy_psf,
-        reconv_psf_dk=2 * jnp.pi / (nxy_psf * 0.2) / 4,
         shears=shears,
         step=step,
         skip_obs_wide_corrections=skip_obs_wide_corrections,
         skip_obs_deep_corrections=skip_obs_deep_corrections,
         return_noshear_deep=return_noshear_deep,
+        scale=scale,
     )
 
     for k in mcal_res:

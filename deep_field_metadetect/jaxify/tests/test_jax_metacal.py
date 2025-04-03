@@ -1,6 +1,5 @@
 import multiprocessing
 
-import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -31,7 +30,11 @@ def _run_single_sim_pair(seed, s2n):
         deep_psf_fac=1.0,
         return_dfmd_obs=True,
     )
-    mcal_res = jax_metacal_op_shears(obs_plus, dk=2 * jnp.pi / (nxy_psf * scale) / 4)
+    mcal_res = jax_metacal_op_shears(
+        obs_plus,
+        nxy_psf=nxy_psf,
+        scale=scale,
+    )
     res_p = fit_gauss_mom_mcal_res(mcal_res)
     res_p = measure_mcal_shear_quants(res_p)
 
@@ -47,7 +50,11 @@ def _run_single_sim_pair(seed, s2n):
         deep_psf_fac=1.0,
         return_dfmd_obs=True,
     )
-    mcal_res = jax_metacal_op_shears(obs_minus, dk=2 * jnp.pi / (nxy_psf * scale) / 4)
+    mcal_res = jax_metacal_op_shears(
+        obs_minus,
+        nxy_psf=nxy_psf,
+        scale=scale,
+    )
     res_m = fit_gauss_mom_mcal_res(mcal_res)
     res_m = measure_mcal_shear_quants(res_m)
 

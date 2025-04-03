@@ -18,8 +18,6 @@ def jax_single_band_deep_field_metadetect(
     obs_wide,
     obs_deep,
     obs_deep_noise,
-    dk_w,
-    dk_d,
     nxy,
     nxy_psf,
     step=DEFAULT_STEP,
@@ -27,18 +25,23 @@ def jax_single_band_deep_field_metadetect(
     skip_obs_wide_corrections=False,
     skip_obs_deep_corrections=False,
     nodet_flags=0,
-):
+    scale=0.2,
+) -> dict:
     """Run deep-field metadetection for a simple scenario of a single band
     with a single image per band using only post-PSF Gaussian weighted moments.
 
     Parameters
     ----------
-    obs_wide : ngmix.Observation
+    obs_wide : DFMdetObservation
         The wide-field observation.
-    obs_deep : ngmix.Observation
+    obs_deep : DFMdetObservation
         The deep-field observation.
-    obs_deep_noise : ngmix.Observation
+    obs_deep_noise : DFMdetObservation
         The deep-field noise observation.
+    nxy: int
+        Image size
+    nxy_psf: int
+        PSF size
     step : float, optional
         The step size for the metacalibration, by default DEFAULT_STEP.
     shears : list, optional
@@ -52,6 +55,8 @@ def jax_single_band_deep_field_metadetect(
         by default False.
     nodet_flags : int, optional
         The bmask flags marking area in the image to skip, by default 0.
+    scale: float
+        pixel scale
 
     Returns
     -------
@@ -67,14 +72,13 @@ def jax_single_band_deep_field_metadetect(
         obs_wide=obs_wide,
         obs_deep=obs_deep,
         obs_deep_noise=obs_deep_noise,
-        dk_w=dk_w,
-        dk_d=dk_d,
         nxy=nxy,
         nxy_psf=nxy_psf,
         step=step,
         shears=shears,
         skip_obs_wide_corrections=skip_obs_wide_corrections,
         skip_obs_deep_corrections=skip_obs_deep_corrections,
+        scale=scale,
     )  # This returns ngmix Obs for now
 
     psf_res = fit_gauss_mom_obs(mcal_res["noshear"].psf)
