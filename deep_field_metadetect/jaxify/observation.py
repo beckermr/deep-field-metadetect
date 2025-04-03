@@ -85,15 +85,15 @@ def ngmix_obs_to_dfmd_obs(obs: ngmix.observation.Observation) -> DFMdetObservati
         psf = ngmix_obs_to_dfmd_obs(obs.get_psf())
 
     return DFMdetObservation(
-        image=jax.numpy.array(obs.image),
-        weight=jax.numpy.array(obs.weight),
-        bmask=jax.numpy.array(obs.bmask) if obs.has_bmask() else None,
-        ormask=jax.numpy.array(obs.ormask) if obs.has_ormask() else None,
-        noise=jax.numpy.array(obs.noise) if obs.has_noise() else None,
+        image=obs.image,
+        weight=obs.weight,
+        bmask=obs.bmask if obs.has_bmask() else None,
+        ormask=obs.ormask if obs.has_ormask() else None,
+        noise=obs.noise if obs.has_noise() else None,
         jacobian=jax_galsim.BaseWCS().from_galsim(jacobian.get_galsim_wcs()),
         psf=psf,
         meta=obs.meta,  # Directly copy metadata
-        mfrac=jax.numpy.array(obs.mfrac) if obs.has_mfrac() else None,
+        mfrac=obs.mfrac if obs.has_mfrac() else None,
         store_pixels=getattr(obs, "store_pixels", True),
         ignore_zero_weight=getattr(obs, "ignore_zero_weight", True),
         jac_row0=jacobian.row0,
