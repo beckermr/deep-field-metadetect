@@ -1,6 +1,5 @@
 import multiprocessing
 
-import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -57,12 +56,11 @@ def _run_single_sim(
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
-        dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
         nxy=nxy,
         nxy_psf=nxy_psf,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
+        scale=scale,
     )
     return measure_mcal_shear_quants(res)
 
@@ -128,12 +126,11 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
-        dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
         nxy=nxy,
         nxy_psf=nxy_psf,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
+        scale=scale,
     )
 
     xc = (res["x"] + 0.5).astype(int)
@@ -175,12 +172,11 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
-        dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
         nxy=nxy,
         nxy_psf=nxy_psf,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
+        scale=scale,
     )
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] == "noshear")
@@ -216,12 +212,11 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
-        dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
         nxy=nxy,
         nxy_psf=nxy_psf,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
+        scale=scale,
     )
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] != "noshear")

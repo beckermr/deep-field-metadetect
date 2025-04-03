@@ -1,6 +1,5 @@
 import multiprocessing
 
-import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -51,12 +50,11 @@ def _run_single_sim(
         obs_w,
         obs_d,
         obs_dn,
-        dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
-        dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
         nxy=53,
         nxy_psf=53,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
+        scale=scale,
     )
     res = fit_gauss_mom_mcal_res(mcal_res)
     return measure_mcal_shear_quants(res)
@@ -243,7 +241,7 @@ def _run_single_sim_maybe_mcal(
     if use_mcal:
         mcal_res = jax_metacal_op_shears(
             obs_w,
-            dk=jnp.pi / (nxy_psf * scale) / 4,
+            scale=scale,
         )
         for key, value in mcal_res.items():
             mcal_res[key] = dfmd_obs_to_ngmix_obs(value)
@@ -252,10 +250,9 @@ def _run_single_sim_maybe_mcal(
             obs_w,
             obs_d,
             obs_dn,
-            dk_w=2 * jnp.pi / (nxy_psf * scale) / 4,
-            dk_d=2 * jnp.pi / (nxy_psf * scale) / 4,
             nxy=nxy,
             nxy_psf=nxy_psf,
+            scale=scale,
         )
     return fit_gauss_mom_mcal_res(mcal_res), mcal_res
 
