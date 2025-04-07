@@ -3,11 +3,11 @@ import ngmix
 import numpy as np
 import pytest
 from ngmix import Jacobian, Observation
-from ngmix.gaussmom import GaussMom
+from ngmix.gaussmom import GaussMom as NgmixGaussMom
 from ngmix.moments import fwhm_to_T
 from ngmix.shape import e1e2_to_g1g2
 
-from deep_field_metadetect.gaussmom.gaussmom import eval_gaussian_moments
+from deep_field_metadetect.gaussmom.gaussmom import GaussMom
 from deep_field_metadetect.gaussmom.gaussmom_core import obs_to_gaussmom_obs
 
 
@@ -53,16 +53,12 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
 
     gaussmom_obs = obs_to_gaussmom_obs(obs=ngmix_obs)
 
-    T = fwhm_to_T(fwhm=fwhm)
-    sigma = np.sqrt(T / 2)
-    maxrad = 100 * sigma
+    fitter = GaussMom(fwhm=fwhm * weight_fac)
+    res = fitter.go(gaussmom_obs=gaussmom_obs)
 
-    res = eval_gaussian_moments(
-        gaussmom_obs=gaussmom_obs, fwhm=fwhm * weight_fac, maxrad=maxrad
-    )
     flux_true = res.flux
     # run ngmix
-    fitter = GaussMom(fwhm=fwhm * weight_fac)
+    fitter = NgmixGaussMom(fwhm=fwhm * weight_fac)
     # get true flux
     res = fitter.go(obs=ngmix_obs)
 
@@ -97,9 +93,9 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
 
         gaussmom_obs = obs_to_gaussmom_obs(obs=ngmix_obs)
         # use a huge weight so that we get the raw moments back out
-        res = eval_gaussian_moments(
-            gaussmom_obs=gaussmom_obs, fwhm=fwhm * weight_fac, maxrad=maxrad
-        )
+        fitter = GaussMom(fwhm=fwhm * weight_fac)
+        res = fitter.go(gaussmom_obs=gaussmom_obs)
+
         if res.flags == 0:
             if weight_fac > 1:
                 # for unweighted we need to convert e to g
@@ -115,7 +111,7 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
             farr.append(res.pars[5])
 
         # compute ngmix moments
-        fitter = GaussMom(fwhm=fwhm * weight_fac)
+        fitter = NgmixGaussMom(fwhm=fwhm * weight_fac)
         # get true flux
         ngmix_res = fitter.go(obs=ngmix_obs)
 

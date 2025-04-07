@@ -1,7 +1,10 @@
+from dataclasses import dataclass
+
 import jax
 import jax.numpy as jnp
 import ngmix
 import numpy as np
+from jax import tree_util
 from ngmix.moments import MOMENTS_NAME_MAP
 
 from deep_field_metadetect.gaussmom.gaussmom_core import (
@@ -39,131 +42,16 @@ def create_circular_mask(umod, vmod, maxrad):
     return mask.astype(int)
 
 
-def get_weighted_moments(obs, T, maxrad=None):
-    """
-    Get weighted moments using this mixture as the weight, including
-    e1,e2,T,s2n etc.  If you just want the raw moments use
-    get_weighted_sums()
-
-    If you want the expected fluxes, you should set the flux to the inverse
-    of the normalization which is 2*pi*sqrt(det)
-
-    Parameters
-    ----------
-    obs: Observation
-        The Observation to compare with. See ngmix.observation.Observation
-        The Observation must have a weight map set
-    maxrad: float, optional
-        If sent, limit moments to within the specified maximum radius
-    with_higher_order: bool, optional
-        If set to True, return higher order moments in the sums/sums_cov
-        arrays.  See ngmix.moments.MOMENTS_NAME_MAP for a map between
-        name and index.
-
-    Returns
-    -------
-    result array with basic sums as well as summary statistics
-    such as e1,e2,T,s2n etc.
-    """
-
-    sums, sums_cov, wsum, _ = get_weighted_sums(
-        obs,
-        T=T,
-        maxrad=maxrad,
-    )
-    return get_weighted_moments_stats(obs, sums, sums_cov, wsum)
-
-
-@jax.jit
-def get_weighted_sums(gaussmom_obs, T, maxrad):
-    """
-    Compute weighted moment sums and their covariance for a 2D Gaussian model.
-
-    This function evaluates the weighted image moments within a circular region
-    defined by `maxrad`, using a Gaussian weight function with size parameter `T`.
-    It returns the weighted sums, the covariance of the sums, total weight,
-    and the normalization factor for the weight function.
-
-    Parameters
-    ----------
-    gaussmom_obs : object
-        An object containing observation data with the following attributes:
-            - u, v: pixel coordinates
-            - image: observed image data
-            - pixelwise_wgt: inverse variance for each pixel
-            - area: pixel area
-    T : float
-        Size (trace) of the weighting Gaussian used for computing moments.
-    maxrad : float
-        Maximum radius (in u, v coordinates) for including pixels in the calculation.
-
-    Returns
-    -------
-    sums : jax.numpy.ndarray
-        Array of shape (6,) containing the weighted image moment sums:
-            [v, u, u^2 - v^2, 2uv, u^2 + v^2, 1]
-    sums_cov : jax.numpy.ndarray
-        Covariance matrix of shape (6, 6) for the weighted sums.
-    wsum : float
-        Total sum of the weights applied to the image.
-    wt_norm : float
-        Normalization factor for the Gaussian weight function.
-    """
-    vcen = 0
-    ucen = 0
-
-    mompars = [0, 0, T / 2, 0, T / 2]
-
-    vmod = gaussmom_obs.v - vcen
-    umod = gaussmom_obs.u - ucen
-
-    var = 1.0 / (gaussmom_obs.pixelwise_wgt)
-    rad2 = umod * umod + vmod * vmod
-
-    circle_mask = jnp.where(jnp.sqrt(rad2) <= maxrad, 1, 0)
-
-    wt_noimage, wt_norm = _eval_gauss2d(
-        mompars, gaussmom_obs.u, gaussmom_obs.v, gaussmom_obs.area
-    )
-
-    wt_noimage = wt_noimage / (wt_norm * gaussmom_obs.area)
-    wt_noimage = circle_mask * wt_noimage
-
-    wdata = wt_noimage * gaussmom_obs.image
-
-    # print(jnp.sum(umod * umod + vmod * vmod))
-
-    F = jnp.stack(
-        [
-            gaussmom_obs.v,
-            gaussmom_obs.u,
-            umod * umod - vmod * vmod,
-            2 * vmod * umod,
-            rad2,
-            jnp.ones_like(gaussmom_obs.v),
-        ]
-    )
-
-    wsum = jnp.sum(wt_noimage)
-    # res["npix"] = jnp.sum(circle_mask)
-
-    sums = jnp.sum(F * wdata, axis=[1, 2])
-
-    sums_cov = jnp.zeros((6, 6))
-
-    for i in range(6):
-        for j in range(6):
-            sums_cov = sums_cov.at[i, j].set(jnp.sum(wt_noimage**2 * var * F[i] * F[j]))
-
-    return sums, sums_cov, wsum, wt_norm
-
-
 # @jax.jit
-def get_weighted_moments_stats(obs, sums, sums_cov, sums_norm=None):
+def get_weighted_moments_stats(
+    gaussmom_obs: GaussMomObs, sums, sums_cov, sums_norm=None
+):
     """Make a fitting results dict from a set of unnormalized moments.
 
     Parameters
     ----------
+    gaussmom_obs : GaussmomObs object
+        see deepfield_meta_detect.gaussmom.GaussMomObs
     sums : jnp.ndarray
         The array of unnormalized moments in the order [Mv, Mu, M1, M2, MT, MF].
     sums_cov : jnp.ndarray
@@ -299,7 +187,7 @@ def get_weighted_moments_stats(obs, sums, sums_cov, sums_norm=None):
     res_T_flagstr = ngmix.flags.get_flags_str(res_T_flags)
 
     res = GaussMomData(
-        obs=obs,
+        obs=gaussmom_obs,
         flags=res_flags,
         flagstr=res_flagstr,
         wsum=sums_norm,
@@ -326,6 +214,8 @@ def get_weighted_moments_stats(obs, sums, sums_cov, sums_norm=None):
 
     # _add_moments_by_name(res) # shouldn't modify sums or sums_cov
 
+    # TODO: not yet computing the normalized momemnts [Mv, Mu, M1, M2, MT, MF]
+
     return res
 
 
@@ -341,7 +231,6 @@ def _add_moments_by_name(res):  # TODO
     # we don't store flags or errors for these
     mkeys = list(MOMENTS_NAME_MAP.keys())
     for name in mkeys:
-        print(name)
         ind = MOMENTS_NAME_MAP[name]
         if ind > sums.size - 1:
             continue
@@ -395,23 +284,184 @@ def get_ratio_var(a, b, var_a, var_b, cov_ab):
     return var
 
 
-def eval_gaussian_moments(gaussmom_obs: GaussMomObs, fwhm: float, maxrad: float):
-    T = fwhm_to_T(fwhm=fwhm)
-    res = get_weighted_moments(obs=gaussmom_obs, T=T, maxrad=maxrad)
-    # e1e2T = mom2e(res[2], res[3], res[4])
+@dataclass
+class GaussMom:
+    fwhm: float
+    with_higher_order: bool = False
+    kind: str = "wmom"
 
-    area = gaussmom_obs.area
-    fac = 1 / area
+    def _set_mompars(self, gaussmom_obs: GaussMomObs):
+        T = fwhm_to_T(self.fwhm)
+        mompars = [0, 0, T / 2, 0, T / 2]
 
-    res._replace(
-        flux=res.flux * fac,
-        flux_err=res.flux_err * fac,
-        pars=res.pars.at[5].set(res.pars[5] * fac),
-        sums=res.sums * fac,
-        sums_cov=res.sums_cov * fac**2,
-        sums_norm=res.sums_norm * fac,
-        wsum=res.wsum * fac,
-        sums_err=res.sums_err * fac,
-    )
+        wt_noimage, wt_norm = _eval_gauss2d(
+            mompars, gaussmom_obs.u, gaussmom_obs.v, gaussmom_obs.area
+        )
 
-    return res
+        self.weight = wt_noimage / (wt_norm * gaussmom_obs.area)
+
+    def go(self, gaussmom_obs, maxrad=None, with_higher_order: bool = False):
+        if maxrad is None:
+            T = fwhm_to_T(fwhm=self.fwhm)
+            sigma = np.sqrt(T / 2)
+            maxrad = 100 * sigma
+        res = self._measure_moments(
+            gaussmom_obs=gaussmom_obs,
+            maxrad=maxrad,
+            with_higher_order=with_higher_order,
+        )
+        return res
+
+    def _measure_moments(
+        self, gaussmom_obs: GaussMomObs, maxrad: float, with_higher_order: bool = False
+    ):
+        res = self.get_weighted_moments(
+            gaussmom_obs=gaussmom_obs,
+            maxrad=maxrad,
+            with_higher_order=with_higher_order,
+        )
+        # e1e2T = mom2e(res[2], res[3], res[4])
+
+        area = gaussmom_obs.area
+        fac = 1 / area
+
+        res._replace(
+            flux=res.flux * fac,
+            flux_err=res.flux_err * fac,
+            pars=res.pars.at[5].set(res.pars[5] * fac),
+            sums=res.sums * fac,
+            sums_cov=res.sums_cov * fac**2,
+            sums_norm=res.sums_norm * fac,
+            wsum=res.wsum * fac,
+            sums_err=res.sums_err * fac,
+        )
+
+        return res
+
+    def get_weighted_moments(
+        self, gaussmom_obs: GaussMomObs, maxrad: float, with_higher_order: bool = False
+    ):
+        """
+        Get weighted moments using this mixture as the weight, including
+        e1,e2,T,s2n etc.  If you just want the raw moments use
+        get_weighted_sums()
+
+        If you want the expected fluxes, you should set the flux to the inverse
+        of the normalization which is 2*pi*sqrt(det)
+
+        Parameters
+        ----------
+        gaussmom_obs : GaussmomObs object
+            see deepfield_meta_detect.gaussmom.GaussMomObs
+        maxrad: float, optional
+            If sent, limit moments to within the specified maximum radius
+        with_higher_order: bool, optional
+            If set to True, return higher order moments in the sums/sums_cov
+            arrays.  See ngmix.moments.MOMENTS_NAME_MAP for a map between
+            name and index.
+
+        Returns
+        -------
+        result array with basic sums as well as summary statistics
+        such as e1,e2,T,s2n etc.
+        """
+
+        if with_higher_order:
+            raise ValueError("Not yet implimented")
+
+        sums, sums_cov, wsum = self.get_weighted_sums(
+            gaussmom_obs,
+            maxrad=maxrad,
+        )
+        return get_weighted_moments_stats(gaussmom_obs, sums, sums_cov, wsum)
+
+    @jax.jit
+    def get_weighted_sums(self, gaussmom_obs, maxrad):
+        """
+        Compute weighted moment sums and their covariance for a 2D Gaussian model.
+
+        This function evaluates the weighted image moments within a circular region
+        defined by `maxrad`, using a Gaussian weight function with size parameter `T`.
+        It returns the weighted sums, the covariance of the sums, total weight,
+        and the normalization factor for the weight function.
+
+        Parameters
+        ----------
+        gaussmom_obs : GaussmomObs object
+            see deepfield_meta_detect.gaussmom.GaussMomObs
+        maxrad : float
+            Maximum radius (in u, v coordinates) for including pixels
+            in the calculation.
+
+        Returns
+        -------
+        sums : jax.numpy.ndarray
+            Array of shape (6,) containing the weighted image moment sums:
+                [v, u, u^2 - v^2, 2uv, u^2 + v^2, 1]
+        sums_cov : jax.numpy.ndarray
+            Covariance matrix of shape (6, 6) for the weighted sums.
+        wsum : float
+            Total sum of the weights applied to the image.
+        wt_norm : float
+            Normalization factor for the Gaussian weight function.
+        """
+        vcen = 0
+        ucen = 0
+
+        vmod = gaussmom_obs.v - vcen
+        umod = gaussmom_obs.u - ucen
+
+        var = 1.0 / (gaussmom_obs.pixelwise_wgt)
+        rad2 = umod * umod + vmod * vmod
+
+        circle_mask = jnp.where(jnp.sqrt(rad2) <= maxrad, 1, 0)
+
+        self._set_mompars(gaussmom_obs=gaussmom_obs)
+        wt_noimage = circle_mask * self.weight
+
+        wdata = wt_noimage * gaussmom_obs.image
+
+        # print(jnp.sum(umod * umod + vmod * vmod))
+
+        F = jnp.stack(
+            [
+                gaussmom_obs.v,
+                gaussmom_obs.u,
+                umod * umod - vmod * vmod,
+                2 * vmod * umod,
+                rad2,
+                jnp.ones_like(gaussmom_obs.v),
+            ]
+        )
+
+        wsum = jnp.sum(wt_noimage)
+        # res["npix"] = jnp.sum(circle_mask)
+
+        sums = jnp.sum(F * wdata, axis=[1, 2])
+
+        sums_cov = jnp.zeros((6, 6))
+
+        for i in range(6):
+            for j in range(6):
+                sums_cov = sums_cov.at[i, j].set(
+                    jnp.sum(wt_noimage**2 * var * F[i] * F[j])
+                )
+
+        return sums, sums_cov, wsum
+
+    # PyTree registration for custom objects like self.weight
+    def tree_flatten(self):
+        children = (self.fwhm, self.with_higher_order)
+        aux_data = {}
+        return children, aux_data
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        fwhm, with_higher_order = children
+        obj = cls(fwhm=fwhm, with_higher_order=with_higher_order)
+
+        return obj
+
+
+# Register manually if needed (optional with newer JAX)
+tree_util.register_pytree_node_class(GaussMom)

@@ -11,7 +11,6 @@ class GaussMomObs(NamedTuple):
     v: jax.Array
     image: jax.Array
     area: float
-    wgt: float
     pixelwise_wgt: jax.Array
 
     def tree_flatten(self):
@@ -20,7 +19,6 @@ class GaussMomObs(NamedTuple):
             self.v,
             self.image,
             self.area,
-            self.wgt,
             self.pixelwise_wgt,
         ), None
 
@@ -103,26 +101,8 @@ def obs_to_gaussmom_obs(obs: ngmix.Observation) -> GaussMomObs:
         obs.image,
         obs.jacobian.dudcol * obs.jacobian.dvdrow
         - obs.jacobian.dudrow * obs.jacobian.dvdcol,
-        jnp.median(obs.weight),
         obs.weight,
     )
-
-
-# def obs_to_ngmix_obs(obs: GaussMomObs) -> ngmix.Observation:
-#     return ngmix.Observation(
-#         np.array(obs.image),
-#         weight=np.array(obs.weight),
-#         bmask=np.zeros_like(obs.image, dtype=int),
-#         jacobian=ngmix.Jacobian(
-#             x=obs.cen_x,
-#             y=obs.cen_y,
-#             dudx=obs.dudx,
-#             dudy=obs.dudy,
-#             dvdx=obs.dvdx,
-#             dvdy=obs.dvdy,
-#         ),
-#         psf=None if obs.psf is None else obs_to_ngmix_obs(obs.psf),
-#     )
 
 
 @jax.jit
