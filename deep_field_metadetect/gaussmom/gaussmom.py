@@ -74,7 +74,7 @@ def get_weighted_moments(obs, T, maxrad=None):
     return get_weighted_moments_stats(obs, sums, sums_cov, wsum)
 
 
-# @jax.jit
+@jax.jit
 def get_weighted_sums(gaussmom_obs, T, maxrad):
     """
     Compute weighted moment sums and their covariance for a 2D Gaussian model.

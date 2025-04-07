@@ -125,6 +125,7 @@ def obs_to_gaussmom_obs(obs: ngmix.Observation) -> GaussMomObs:
 #     )
 
 
+@jax.jit
 def _eval_gauss2d(pars, u, v, area):
     cen_v, cen_u, irr, irc, icc = pars[0:5]
 

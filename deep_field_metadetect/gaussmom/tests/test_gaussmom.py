@@ -61,17 +61,11 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
         gaussmom_obs=gaussmom_obs, fwhm=fwhm * weight_fac, maxrad=maxrad
     )
     flux_true = res.flux
-    print(flux_true)
-    print(res)
-
     # run ngmix
     fitter = GaussMom(fwhm=fwhm * weight_fac)
     # get true flux
     res = fitter.go(obs=ngmix_obs)
-    ngmix_flux_true = res["flux"]
 
-    print("ngmix flux true " + str(ngmix_flux_true))
-    print(res)
     for _ in range(50):
         shift = rng.uniform(low=-scale / 2, high=scale / 2, size=2)
         xy = gs_wcs.toImage(galsim.PositionD(shift))
@@ -99,9 +93,9 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
         )
 
         _im = im + (rng.normal(size=im.shape) * noise)
-        obs = Observation(image=_im, weight=wgt, jacobian=jac)
+        ngmix_obs = Observation(image=_im, weight=wgt, jacobian=jac)
 
-        gaussmom_obs = obs_to_gaussmom_obs(obs=obs)
+        gaussmom_obs = obs_to_gaussmom_obs(obs=ngmix_obs)
         # use a huge weight so that we get the raw moments back out
         res = eval_gaussian_moments(
             gaussmom_obs=gaussmom_obs, fwhm=fwhm * weight_fac, maxrad=maxrad
@@ -120,6 +114,19 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
             Tarr.append(res.pars[2] + res.pars[4])
             farr.append(res.pars[5])
 
+        # compute ngmix moments
+        fitter = GaussMom(fwhm=fwhm * weight_fac)
+        # get true flux
+        ngmix_res = fitter.go(obs=ngmix_obs)
+
+        # Compare ngmix VS jax versions
+        np.testing.assert_allclose(res.sums, ngmix_res["sums"], atol=1e-9)
+        np.testing.assert_allclose(res.sums_cov, ngmix_res["sums_cov"], atol=1e-9)
+        np.testing.assert_allclose(res.e[0], ngmix_res["e"][0], atol=1e-9)
+        np.testing.assert_allclose(res.e[1], ngmix_res["e"][1], atol=1e-9)
+        np.testing.assert_allclose(res.s2n, ngmix_res["s2n"])
+        np.testing.assert_allclose(res.flux, ngmix_res["flux"])
+
     g1 = np.mean(g1arr)
     g2 = np.mean(g2arr)
 
@@ -134,8 +141,6 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
         assert np.abs(T - fwhm_to_T(fwhm)) < 1e-6
 
     if weight_fac > 1:
-        print(np.sum(im))
-        print(flux_true)
         assert np.allclose(flux_true, np.sum(im))
     assert np.abs(np.mean(farr) - flux_true) < 1e-4, (np.mean(farr), np.std(farr))
 
