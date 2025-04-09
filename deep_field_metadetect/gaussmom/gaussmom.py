@@ -517,8 +517,6 @@ class GaussMom:
 
         wdata = wt_noimage * gaussmom_obs.image
 
-        # print(jnp.sum(umod * umod + vmod * vmod))
-
         F = jnp.stack(
             [
                 gaussmom_obs.v,
