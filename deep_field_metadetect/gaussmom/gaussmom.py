@@ -13,8 +13,6 @@ from deep_field_metadetect.gaussmom.gaussmom_core import (
     _eval_gauss2d,
 )
 
-jax.config.update("jax_enable_x64", True)
-
 
 @jax.jit
 def fwhm_to_sigma(fwhm: float):
@@ -42,11 +40,14 @@ def create_circular_mask(umod, vmod, maxrad):
     return mask.astype(int)
 
 
-# @jax.jit
+@jax.jit
 def get_weighted_moments_stats(
     gaussmom_obs: GaussMomObs, sums, sums_cov, sums_norm=None
 ):
     """Make a fitting results dict from a set of unnormalized moments.
+
+    Note this function does not check shapes
+    or call the _add_moments_by_name function of ngmix
 
     Parameters
     ----------
@@ -65,11 +66,6 @@ def get_weighted_moments_stats(
     res : dict
         A dictionary of results.
     """
-    if sums.shape[0] not in (6, 17):
-        raise ValueError("You must pass exactly 6 or 17 unnormalized moments.")
-    if sums_cov.shape not in [(6, 6), (17, 17)]:
-        raise ValueError("You must pass a 6x6 or 17x17 covariance matrix.")
-
     valid_shapes = (sums.shape[0] in (6, 17)) & (sums_cov.shape in [(6, 6), (17, 17)])
     sums = jnp.where(valid_shapes, sums, jnp.nan)
     sums_cov = jnp.where(valid_shapes, sums_cov, jnp.nan)
@@ -82,15 +78,15 @@ def get_weighted_moments_stats(
     m2_ind = MOMENTS_NAME_MAP["M2"]
 
     res_flags = 0
-    res_flagstr = ""
+
     res_flux = sums[mf_ind]
     res_sums = sums
     res_sums_cov = sums_cov
     res_sums_norm = sums_norm if sums_norm is not None else jnp.nan
     res_flux_flags = 0
-    res_flux_flagstr = ""
+
     res_T_flags = 0
-    res_T_flagstr = ""
+
     res_flux_err = jnp.nan
     res_T = jnp.nan
     res_T_err = jnp.nan
@@ -103,15 +99,25 @@ def get_weighted_moments_stats(
     res_sums_err = jnp.full(6, jnp.nan)
 
     # Flux only
-    if sums_cov[mf_ind, mf_ind] > 0:
+    def pos_var_fn(_):
         res_flux_err = jnp.sqrt(sums_cov[mf_ind, mf_ind])
         res_s2n = res_flux / res_flux_err
-    else:
-        res_flux_flags |= ngmix.flags.NONPOS_VAR
+        return res_flux_err, res_s2n, res_flux_flags
+
+    def nonpos_var_fn(_):
+        res_flux_flags_new = res_flux_flags | ngmix.flags.NONPOS_VAR
+        return res_flux_err, res_s2n, res_flux_flags_new
+
+    res_flux_err, res_s2n, res_flux_flags = jax.lax.cond(
+        sums_cov[mf_ind, mf_ind] > 0,
+        pos_var_fn,
+        nonpos_var_fn,
+        operand=None,
+    )
 
     # Flux + T only
-    if sums_cov[mf_ind, mf_ind] > 0 and sums_cov[mt_ind, mt_ind] > 0:
-        if sums[mf_ind] > 0:
+    def pos_var_fn(_):
+        def pos_flux_fn(_):
             res_T = sums[mt_ind] / sums[mf_ind]
             res_T_err = get_ratio_error(
                 sums[mt_ind],
@@ -120,25 +126,60 @@ def get_weighted_moments_stats(
                 sums_cov[mf_ind, mf_ind],
                 sums_cov[mt_ind, mf_ind],
             )
-        else:
-            # flux <= 0.0
-            res_T_flags |= ngmix.flags.NONPOS_FLUX
-    else:
-        res_T_flags |= ngmix.flags.NONPOS_VAR
+            return res_T, res_T_err, res_T_flags
+
+        def nonpos_flux_fn(_):
+            # res_T = jnp.nan
+            # res_T_err = jnp.nan
+            new_res_T_flags = res_T_flags | ngmix.flags.NONPOS_FLUX
+            return res_T, res_T_err, new_res_T_flags
+
+        return jax.lax.cond(
+            sums[mf_ind] > 0,
+            pos_flux_fn,
+            nonpos_flux_fn,
+            operand=None,
+        )
+
+    def nonpos_var_fn(_):
+        # res_T = jnp.nan
+        # res_T_err = jnp.nan
+        new_res_T_flags = res_T_flags | ngmix.flags.NONPOS_VAR
+        return res_T, res_T_err, new_res_T_flags
+
+    res_T, res_T_err, res_T_flags = jax.lax.cond(
+        (sums_cov[mf_ind, mf_ind] > 0) & (sums_cov[mt_ind, mt_ind] > 0),
+        pos_var_fn,
+        nonpos_var_fn,
+        operand=None,
+    )
 
     # now handle full flags
-    if np.all(np.diagonal(sums_cov) > 0):
-        res_sums_err = np.sqrt(np.diagonal(sums_cov))
-    else:
-        res_flags |= ngmix.flags.NONPOS_VAR
+    def diag_all_true(_):
+        return jnp.sqrt(jnp.diagonal(sums_cov)), res_flags
 
-    if res_flags == 0:
-        if res_flux > 0:
-            if res_T > 0:
+    def diag_not_all_true(_):
+        # return deault values,
+        # and update flags with NONPOS_VAR bit
+        return jnp.full(6, jnp.nan), res_flags | ngmix.flags.NONPOS_VAR
+
+    res_sums_err, res_flags = jax.lax.cond(
+        jnp.all(jnp.diagonal(sums_cov) > 0),
+        diag_all_true,
+        diag_not_all_true,
+        operand=None,
+    )
+
+    # Second branch: if flags are still 0, then check flux, then T,
+    # then compute the shape params
+    def valid_flags_fn(_):
+        def flux_positive_fn(_):
+            # If flux > 0 then check if T > 0
+            def T_positive_fn(_):
+                # Compute the two shape estimates
                 res_e1 = sums[m1_ind] / sums[mt_ind]
                 res_e2 = sums[m2_ind] / sums[mt_ind]
                 res_e = jnp.array([res_e1, res_e2])
-
                 e_err = jnp.array(
                     [
                         get_ratio_error(
@@ -158,18 +199,69 @@ def get_weighted_moments_stats(
                     ]
                 )
 
-                if jnp.all(jnp.isfinite(e_err)):
-                    res_e_err = e_err
+                def e_err_finite_fn(_):
                     res_e_cov = jnp.diag(e_err**2)
-                else:
-                    # bad e_err
-                    res_flags |= ngmix.flags.NONPOS_SHAPE_VAR
-            else:
-                # T <= 0.0
-                res_flags |= ngmix.flags.NONPOS_SIZE
-        else:
-            # flux <= 0.0
-            res_flags |= ngmix.flags.NONPOS_FLUX
+                    return res_e, e_err, res_e_cov, res_flags
+
+                def e_err_nonfinite_fn(_):
+                    new_flags = res_flags | ngmix.flags.NONPOS_SHAPE_VAR
+                    return (
+                        res_e,
+                        e_err,
+                        jnp.diag(jnp.array([jnp.nan, jnp.nan])),
+                        new_flags,
+                    )
+
+                return jax.lax.cond(
+                    jnp.all(jnp.isfinite(e_err)),
+                    e_err_finite_fn,
+                    e_err_nonfinite_fn,
+                    operand=(res_e, e_err),
+                )
+
+            def T_nonpositive_fn(_):
+                # When T <= 0, set output values to deafault and update flags.
+                return (
+                    jnp.array([jnp.nan, jnp.nan]),
+                    jnp.array([jnp.nan, jnp.nan]),
+                    jnp.diag(jnp.array([jnp.nan, jnp.nan])),
+                    res_flags | ngmix.flags.NONPOS_SIZE,
+                )
+
+            return jax.lax.cond(
+                res_T > 0, T_positive_fn, T_nonpositive_fn, operand=None
+            )
+
+        def flux_nonpositive_fn(_):
+            # When res_flux <= 0, set outputs to deafault and update flags
+            return (
+                jnp.array([jnp.nan, jnp.nan]),
+                jnp.array([jnp.nan, jnp.nan]),
+                jnp.diag(jnp.array([jnp.nan, jnp.nan])),
+                res_flags | ngmix.flags.NONPOS_FLUX,
+            )
+
+        return jax.lax.cond(
+            res_flux > 0, flux_positive_fn, flux_nonpositive_fn, operand=None
+        )
+
+    # If flags are already nonzero, change nothing
+    def invalid_flags_fn(_):
+        return (
+            jnp.array([jnp.nan, jnp.nan]),
+            jnp.array([jnp.nan, jnp.nan]),
+            jnp.diag(jnp.array([jnp.nan, jnp.nan])),
+            res_flags,
+        )
+
+    res_e, res_e_err, res_e_cov, res_flags = jax.lax.cond(
+        res_flags == 0,
+        valid_flags_fn,
+        invalid_flags_fn,
+        operand=None,
+    )
+    res_e1 = res_e[0]
+    res_e2 = res_e[1]
 
     pars = jnp.array(
         [
@@ -182,23 +274,20 @@ def get_weighted_moments_stats(
         ]
     )
 
-    res_flagstr = ngmix.flags.get_flags_str(res_flags)
-    res_flux_flagstr = ngmix.flags.get_flags_str(res_flux_flags)
-    res_T_flagstr = ngmix.flags.get_flags_str(res_T_flags)
+    # res_flagstr = ngmix.flags.get_flags_str(res_flags)
+    # res_flux_flagstr = ngmix.flags.get_flags_str(res_flux_flags)
+    # res_T_flagstr = ngmix.flags.get_flags_str(res_T_flags)
 
     res = GaussMomData(
         obs=gaussmom_obs,
         flags=res_flags,
-        flagstr=res_flagstr,
         wsum=sums_norm,
         flux=res_flux,
         sums=res_sums,
         sums_cov=res_sums_cov,
         sums_norm=res_sums_norm,
         flux_flags=res_flux_flags,
-        flux_flagstr=res_flux_flagstr,
         T_flags=res_T_flags,
-        T_flagstr=res_T_flagstr,
         flux_err=res_flux_err,
         T=res_T,
         T_err=res_T_err,
@@ -281,6 +370,8 @@ def get_ratio_var(a, b, var_a, var_b, cov_ab):
     rsq = (a / b) ** 2
 
     var = rsq * (var_a / a**2 + var_b / b**2 - 2 * cov_ab / (a * b))
+
+    # var = jnp.where(var>1e100, jnp.inf, var)
     return var
 
 

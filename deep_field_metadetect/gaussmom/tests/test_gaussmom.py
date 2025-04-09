@@ -107,7 +107,7 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
 
             g1arr.append(_g1)
             g2arr.append(_g2)
-            Tarr.append(res.pars[2] + res.pars[4])
+            Tarr.append(res.pars[4])
             farr.append(res.pars[5])
 
         # compute ngmix moments
@@ -122,6 +122,7 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
         np.testing.assert_allclose(res.e[1], ngmix_res["e"][1], atol=1e-9)
         np.testing.assert_allclose(res.s2n, ngmix_res["s2n"])
         np.testing.assert_allclose(res.flux, ngmix_res["flux"])
+        np.testing.assert_allclose(res.pars[4], ngmix_res["pars"][4])
 
     g1 = np.mean(g1arr)
     g2 = np.mean(g2arr)

@@ -35,13 +35,10 @@ class GaussMomData(NamedTuple):
     pars: jnp.ndarray
     wsum: float = 0
     flags: int = 0
-    flagstr: str = ""
     flux: float = 0
     sums_norm: jnp.ndarray = jnp.nan
     flux_flags: int = 0
-    flux_flagstr: str = ""
     T_flags: int = 0
-    T_flagstr: str = ""
     flux_err: float = jnp.nan
     T: float = jnp.nan
     T_err: float = jnp.nan
@@ -61,13 +58,10 @@ class GaussMomData(NamedTuple):
             self.pars,
             self.wsum,
             self.flags,
-            self.flagstr,
             self.flux,
             self.sums_norm,
             self.flux_flags,
-            self.flux_flagstr,
             self.T_flags,
-            self.T_flagstr,
             self.flux_err,
             self.T,
             self.T_err,
