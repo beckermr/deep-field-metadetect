@@ -65,8 +65,8 @@ def get_weighted_moments_stats(
 
     Returns
     -------
-    res : dict
-        A dictionary of results.
+    res: GaussmomData Object
+        Results
     """
     valid_shapes = (sums.shape[0] in (6, 17)) & (sums_cov.shape in [(6, 6), (17, 17)])
     sums = jnp.where(valid_shapes, sums, jnp.nan)
@@ -276,10 +276,6 @@ def get_weighted_moments_stats(
         ]
     )
 
-    # res_flagstr = ngmix.flags.get_flags_str(res_flags)
-    # res_flux_flagstr = ngmix.flags.get_flags_str(res_flux_flags)
-    # res_T_flagstr = ngmix.flags.get_flags_str(res_T_flags)
-
     res = GaussMomData(
         obs=gaussmom_obs,
         npix=npix,
@@ -456,8 +452,8 @@ class GaussMom:
 
         Returns
         -------
-        result array with basic sums as well as summary statistics
-        such as e1,e2,T,s2n etc.
+        res: GaussmomData Object
+            results
         """
 
         if with_higher_order:
