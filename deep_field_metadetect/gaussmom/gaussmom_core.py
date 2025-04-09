@@ -30,6 +30,7 @@ class GaussMomObs(NamedTuple):
 @jax.tree_util.register_pytree_node_class
 class GaussMomData(NamedTuple):
     obs: list[GaussMomObs]
+    npix: int
     sums: jnp.ndarray
     sums_cov: jnp.ndarray
     pars: jnp.ndarray
@@ -53,6 +54,7 @@ class GaussMomData(NamedTuple):
     def tree_flatten(self):
         return (
             self.obs,
+            self.npix,
             self.sums,
             self.sums_cov,
             self.pars,

@@ -42,7 +42,7 @@ def create_circular_mask(umod, vmod, maxrad):
 
 @jax.jit
 def get_weighted_moments_stats(
-    gaussmom_obs: GaussMomObs, sums, sums_cov, sums_norm=None
+    gaussmom_obs: GaussMomObs, sums, sums_cov, npix, sums_norm=None
 ):
     """Make a fitting results dict from a set of unnormalized moments.
 
@@ -57,6 +57,8 @@ def get_weighted_moments_stats(
         The array of unnormalized moments in the order [Mv, Mu, M1, M2, MT, MF].
     sums_cov : jnp.ndarray
         The array of unnormalized moment covariances.
+    npix: int
+        number of pixels within maxrad
     sums_norm : float, optional
         The sum of the moment weight function itself. This is added to the output data.
         The default of None puts in NaN.
@@ -280,6 +282,7 @@ def get_weighted_moments_stats(
 
     res = GaussMomData(
         obs=gaussmom_obs,
+        npix=npix,
         flags=res_flags,
         wsum=sums_norm,
         flux=res_flux,
@@ -460,11 +463,17 @@ class GaussMom:
         if with_higher_order:
             raise ValueError("Not yet implimented")
 
-        sums, sums_cov, wsum = self.get_weighted_sums(
+        sums, sums_cov, wsum, npix = self.get_weighted_sums(
             gaussmom_obs,
             maxrad=maxrad,
         )
-        return get_weighted_moments_stats(gaussmom_obs, sums, sums_cov, wsum)
+        return get_weighted_moments_stats(
+            gaussmom_obs=gaussmom_obs,
+            sums=sums,
+            sums_cov=sums_cov,
+            npix=npix,
+            sums_norm=wsum,
+        )
 
     @jax.jit
     def get_weighted_sums(self, gaussmom_obs, maxrad):
@@ -493,8 +502,8 @@ class GaussMom:
             Covariance matrix of shape (6, 6) for the weighted sums.
         wsum : float
             Total sum of the weights applied to the image.
-        wt_norm : float
-            Normalization factor for the Gaussian weight function.
+        npix: int
+            Number of pixels within maxrad
         """
         vcen = 0
         ucen = 0
@@ -526,7 +535,7 @@ class GaussMom:
         )
 
         wsum = jnp.sum(wt_noimage)
-        # res["npix"] = jnp.sum(circle_mask)
+        npix = jnp.sum(circle_mask)
 
         sums = jnp.sum(F * wdata, axis=[1, 2])
 
@@ -538,7 +547,7 @@ class GaussMom:
                     jnp.sum(wt_noimage**2 * var * F[i] * F[j])
                 )
 
-        return sums, sums_cov, wsum
+        return sums, sums_cov, wsum, npix
 
     # PyTree registration for custom objects like self.weight
     def tree_flatten(self):
