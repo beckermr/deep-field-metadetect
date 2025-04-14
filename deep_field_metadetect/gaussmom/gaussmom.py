@@ -447,8 +447,7 @@ class GaussMom:
             If sent, limit moments to within the specified maximum radius
         with_higher_order: bool, optional
             If set to True, return higher order moments in the sums/sums_cov
-            arrays.  See ngmix.moments.MOMENTS_NAME_MAP for a map between
-            name and index.
+            arrays.  [Yet to be implemented]
 
         Returns
         -------
@@ -543,7 +542,6 @@ class GaussMom:
 
         return sums, sums_cov, wsum, npix
 
-    # PyTree registration for custom objects like self.weight
     def tree_flatten(self):
         children = (self.fwhm, self.with_higher_order)
         aux_data = {}
@@ -557,5 +555,4 @@ class GaussMom:
         return obj
 
 
-# Register manually if needed (optional with newer JAX)
 tree_util.register_pytree_node_class(GaussMom)
