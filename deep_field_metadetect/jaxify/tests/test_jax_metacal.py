@@ -149,18 +149,18 @@ def test_metacal_jax_vs_ngmix():
             res_p_ngmix.append(res_ngmix[0])
             res_m_ngmix.append(res_ngmix[1])
 
-            np.allclose(
+            assert np.allclose(
                 res[0].tolist(),
                 res_ngmix[0].tolist(),
                 atol=1e-5,
-                rtol=0.01,
+                rtol=0.025,
                 equal_nan=True,
             )
-            np.allclose(
+            assert np.allclose(
                 res[1].tolist(),
                 res_ngmix[1].tolist(),
                 atol=1e-5,
-                rtol=0.01,
+                rtol=0.025,
                 equal_nan=True,
             )
 
@@ -178,12 +178,12 @@ def test_metacal_jax_vs_ngmix():
         jackknife=len(res_p_ngmix),
     )
 
-    np.allclose(m, m_ng, atol=1e-12)
-    np.allclose(merr, merr_ng, atol=1e-12)
-    np.allclose(c1err, c1err_ng, atol=1e-12)
-    np.allclose(c1, c1_ng, atol=1e-12)
-    np.allclose(c2err, c2err_ng, atol=1e-12)
-    np.allclose(c2, c2_ng, atol=1e-12)
+    assert np.allclose(m, m_ng, atol=1e-4)
+    assert np.allclose(merr, merr_ng, atol=1e-7)
+    assert np.allclose(c1err, c1err_ng, atol=1e-7)
+    assert np.allclose(c1, c1_ng, atol=1e-4)
+    assert np.allclose(c2err, c2err_ng, atol=1e-7)
+    assert np.allclose(c2, c2_ng, atol=1e-4)
 
     print_m_c(m, merr, c1, c1err, c2, c2err)
     assert_m_c_ok(m, merr, c1, c1err, c2, c2err)

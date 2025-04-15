@@ -175,12 +175,6 @@ def test_metadetect_single_band_deep_field_metadetect_smoke():
 
 @pytest.mark.parametrize("deep_psf_ratio", [0.8, 1, 1.1])
 def test_metadetect_single_band_deep_field_metadetect_jax_vs_ngmix(deep_psf_ratio):
-    def recursive_allclose(d1, d2, atol=1, rtol=1, equal_nan=True):
-        return all(
-            np.allclose(d1[k], d2[k], atol=atol, rtol=rtol, equal_nan=equal_nan)
-            for k in len(d1)
-        )
-
     nsims = 5
     noise_fac = 1 / np.sqrt(30)
 
@@ -200,18 +194,18 @@ def test_metadetect_single_band_deep_field_metadetect_jax_vs_ngmix(deep_psf_rati
             res_p_ngmix.append(res_ngmix[0])
             res_m_ngmix.append(res_ngmix[1])
 
-            np.allclose(
+            assert np.allclose(
                 res[0].tolist(),
                 res_ngmix[0].tolist(),
                 atol=1e-5,
-                rtol=0.01,
+                rtol=0.025,
                 equal_nan=True,
             )
-            np.allclose(
+            assert np.allclose(
                 res[1].tolist(),
                 res_ngmix[1].tolist(),
                 atol=1e-5,
-                rtol=0.01,
+                rtol=0.025,
                 equal_nan=True,
             )
 
@@ -229,12 +223,12 @@ def test_metadetect_single_band_deep_field_metadetect_jax_vs_ngmix(deep_psf_rati
         jackknife=len(res_p_ngmix),
     )
 
-    np.allclose(m, m_ng, atol=1e-12)
-    np.allclose(merr, merr_ng, atol=1e-12)
-    np.allclose(c1err, c1err_ng, atol=1e-12)
-    np.allclose(c1, c1_ng, atol=1e-12)
-    np.allclose(c2err, c2err_ng, atol=1e-12)
-    np.allclose(c2, c2_ng, atol=1e-12)
+    assert np.allclose(m, m_ng, atol=1e-4)
+    assert np.allclose(merr, merr_ng, atol=1e-7)
+    assert np.allclose(c1err, c1err_ng, atol=1e-7)
+    assert np.allclose(c1, c1_ng, atol=1e-4)
+    assert np.allclose(c2err, c2err_ng, atol=1e-7)
+    assert np.allclose(c2, c2_ng, atol=1e-4)
 
     print_m_c(m, merr, c1, c1err, c2, c2err)
     print_m_c(m_ng, merr_ng, c1_ng, c1err_ng, c2_ng, c2err_ng)
