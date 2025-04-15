@@ -118,7 +118,7 @@ def _jax_render_psf_and_build_obs(image, dfmd_obs, reconv_psf, nxy_psf, weight_f
         ny=nxy_psf,
         wcs=dfmd_obs.psf.jacobian,
         offset=jax_galsim.PositionD(
-            x=dfmd_obs.psf.jac_col0 + 1 - nxy_psf / 2,  # TODO: what if the size is odd?
+            x=dfmd_obs.psf.jac_col0 + 1 - nxy_psf / 2,
             y=dfmd_obs.psf.jac_row0 + 1 - nxy_psf / 2,
         ),
     ).array
