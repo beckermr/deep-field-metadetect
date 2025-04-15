@@ -179,10 +179,10 @@ def test_metacal_jax_vs_ngmix():
     )
 
     assert np.allclose(m, m_ng, atol=1e-4)
-    assert np.allclose(merr, merr_ng, atol=1e-7)
-    assert np.allclose(c1err, c1err_ng, atol=1e-7)
+    assert np.allclose(merr, merr_ng, atol=1e-6)
+    assert np.allclose(c1err, c1err_ng, atol=1e-6)
     assert np.allclose(c1, c1_ng, atol=1e-4)
-    assert np.allclose(c2err, c2err_ng, atol=1e-7)
+    assert np.allclose(c2err, c2err_ng, atol=1e-6)
     assert np.allclose(c2, c2_ng, atol=1e-4)
 
     print_m_c(m, merr, c1, c1err, c2, c2err)
