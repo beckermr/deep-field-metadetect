@@ -6,11 +6,12 @@ import pytest
 from deep_field_metadetect.jaxify.jax_metadetect import (
     jax_single_band_deep_field_metadetect,
 )
+from deep_field_metadetect.jaxify.observation import ngmix_obs_to_dfmd_obs
+from deep_field_metadetect.metadetect import single_band_deep_field_metadetect
 from deep_field_metadetect.utils import (
     MAX_ABS_C,
     MAX_ABS_M,
     assert_m_c_ok,
-    canned_viz_for_obs,
     estimate_m_and_c,
     make_simple_sim,
     measure_mcal_shear_quants,
@@ -45,12 +46,6 @@ def _run_single_sim(
         n_objs=10,
         return_dfmd_obs=True,
     )
-    if False:  # pragma: no cover
-        fig, *_ = canned_viz_for_obs(obs_w, "obs_w")
-        fig.show()
-        import pdb
-
-        pdb.set_trace()
 
     res = jax_single_band_deep_field_metadetect(
         obs_w,
@@ -91,11 +86,159 @@ def _run_sim_pair(seed, s2n, deep_noise_fac, deep_psf_fac, skip_wide, skip_deep)
     return res_p, res_m
 
 
+def _run_single_sim_jax_and_ngmix(
+    seed,
+    s2n,
+    g1,
+    g2,
+    deep_noise_fac,
+    deep_psf_fac,
+    skip_wide,
+    skip_deep,
+):
+    nxy = 53
+    nxy_psf = 53
+    scale = 0.2
+
+    obs_w_ngmix, obs_d_ngmix, obs_dn_ngmix = make_simple_sim(
+        seed=seed,
+        g1=g1,
+        g2=g2,
+        s2n=s2n,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
+        deep_noise_fac=deep_noise_fac,
+        deep_psf_fac=deep_psf_fac,
+        return_dfmd_obs=False,
+    )
+    res_ngmix = single_band_deep_field_metadetect(
+        obs_w_ngmix,
+        obs_d_ngmix,
+        obs_dn_ngmix,
+        skip_obs_wide_corrections=skip_wide,
+        skip_obs_deep_corrections=skip_deep,
+    )
+
+    obs_w = ngmix_obs_to_dfmd_obs(obs_w_ngmix)
+    obs_d = ngmix_obs_to_dfmd_obs(obs_d_ngmix)
+    obs_dn = ngmix_obs_to_dfmd_obs(obs_dn_ngmix)
+
+    res = jax_single_band_deep_field_metadetect(
+        obs_w,
+        obs_d,
+        obs_dn,
+        nxy=53,
+        nxy_psf=53,
+        skip_obs_wide_corrections=skip_wide,
+        skip_obs_deep_corrections=skip_deep,
+        scale=scale,
+    )
+
+    return measure_mcal_shear_quants(res), measure_mcal_shear_quants(res_ngmix)
+
+
+def _run_sim_pair_jax_and_ngmix(
+    seed, s2n, deep_noise_fac, deep_psf_fac, skip_wide, skip_deep
+):
+    res_p, res_p_ngmix = _run_single_sim_jax_and_ngmix(
+        seed,
+        s2n,
+        0.02,
+        0.0,
+        deep_noise_fac,
+        deep_psf_fac,
+        skip_wide,
+        skip_deep,
+    )
+
+    res_m, res_m_ngmix = _run_single_sim_jax_and_ngmix(
+        seed,
+        s2n,
+        -0.02,
+        0.0,
+        deep_noise_fac,
+        deep_psf_fac,
+        skip_wide,
+        skip_deep,
+    )
+
+    return (res_p, res_m), (res_p_ngmix, res_m_ngmix)
+
+
 def test_metadetect_single_band_deep_field_metadetect_smoke():
     res_p, res_m = _run_sim_pair(1234, 1e4, 1.0 / np.sqrt(10), 1, False, False)
     for col in res_p.dtype.names:
         assert np.isfinite(res_p[col]).all()
         assert np.isfinite(res_m[col]).all()
+
+
+@pytest.mark.parametrize("deep_psf_ratio", [0.8, 1, 1.1])
+def test_metadetect_single_band_deep_field_metadetect_jax_vs_ngmix(deep_psf_ratio):
+    def recursive_allclose(d1, d2, atol=1, rtol=1, equal_nan=True):
+        return all(
+            np.allclose(d1[k], d2[k], atol=atol, rtol=rtol, equal_nan=equal_nan)
+            for k in len(d1)
+        )
+
+    nsims = 5
+    noise_fac = 1 / np.sqrt(30)
+
+    rng = np.random.RandomState(seed=3412)
+    seeds = rng.randint(size=nsims, low=1, high=2**29)
+    res_p = []
+    res_m = []
+    res_p_ngmix = []
+    res_m_ngmix = []
+    for seed in seeds:
+        res, res_ngmix = _run_sim_pair_jax_and_ngmix(
+            seed, 1e4, noise_fac, deep_psf_ratio, False, False
+        )
+        if res is not None:
+            res_p.append(res[0])
+            res_m.append(res[1])
+            res_p_ngmix.append(res_ngmix[0])
+            res_m_ngmix.append(res_ngmix[1])
+
+            np.allclose(
+                res[0].tolist(),
+                res_ngmix[0].tolist(),
+                atol=1e-5,
+                rtol=0.01,
+                equal_nan=True,
+            )
+            np.allclose(
+                res[1].tolist(),
+                res_ngmix[1].tolist(),
+                atol=1e-5,
+                rtol=0.01,
+                equal_nan=True,
+            )
+
+    m, merr, c1, c1err, c2, c2err = estimate_m_and_c(
+        np.concatenate(res_p),
+        np.concatenate(res_m),
+        0.02,
+        jackknife=len(res_p),
+    )
+
+    m_ng, merr_ng, c1_ng, c1err_ng, c2_ng, c2err_ng = estimate_m_and_c(
+        np.concatenate(res_p_ngmix),
+        np.concatenate(res_m_ngmix),
+        0.02,
+        jackknife=len(res_p_ngmix),
+    )
+
+    np.allclose(m, m_ng, atol=1e-12)
+    np.allclose(merr, merr_ng, atol=1e-12)
+    np.allclose(c1err, c1err_ng, atol=1e-12)
+    np.allclose(c1, c1_ng, atol=1e-12)
+    np.allclose(c2err, c2err_ng, atol=1e-12)
+    np.allclose(c2, c2_ng, atol=1e-12)
+
+    print_m_c(m, merr, c1, c1err, c2, c2err)
+    print_m_c(m_ng, merr_ng, c1_ng, c1err_ng, c2_ng, c2err_ng)
+    assert_m_c_ok(m, merr, c1, c1err, c2, c2err)
 
 
 def test_metadetect_single_band_deep_field_metadetect_bmask():
@@ -234,13 +377,6 @@ def test_metadetect_single_band_deep_field_metadetect(deep_psf_ratio):
 
     rng = np.random.RandomState(seed=34132)
     seeds = rng.randint(size=nsims, low=1, high=2**29)
-    # jobs = [
-    #     joblib.delayed(_run_sim_pair)(
-    #         seed, 1e4, noise_fac, deep_psf_ratio, False, False
-    #     )
-    #     for seed in seeds
-    # ]
-    # outputs = joblib.Parallel(n_jobs=-1, verbose=10)(jobs)
     res_p = []
     res_m = []
     for seed in seeds:
