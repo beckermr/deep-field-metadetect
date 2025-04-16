@@ -4,7 +4,6 @@ import jax
 import jax_galsim
 import ngmix
 import numpy as np
-from ngmix.jacobian import Jacobian
 from ngmix.observation import Observation
 
 
@@ -15,13 +14,9 @@ class DFMdetObservation(NamedTuple):
     bmask: Optional[jax.Array]
     ormask: Optional[jax.Array]
     noise: Optional[jax.Array]
-    jacobian: Optional[jax.Array]
+    aft: Optional[jax_galsim.wcs.AffineTransform]
     psf: Optional["DFMdetObservation"]
     mfrac: Optional[jax.Array]
-    jac_row0: Optional[float]
-    jac_col0: Optional[float]
-    jac_det: Optional[float]
-    jac_scale: Optional[float]
     meta: Optional[dict]
     store_pixels: bool
     ignore_zero_weight: bool
@@ -33,13 +28,9 @@ class DFMdetObservation(NamedTuple):
             self.bmask,
             self.ormask,
             self.noise,
-            self.jacobian,
+            self.aft,
             self.psf,
             self.mfrac,
-            self.jac_row0,
-            self.jac_col0,
-            self.jac_det,
-            self.jac_scale,
         )
 
         aux_data = (self.meta, self.store_pixels, self.ignore_zero_weight)
@@ -90,16 +81,21 @@ def ngmix_obs_to_dfmd_obs(obs: ngmix.observation.Observation) -> DFMdetObservati
         bmask=obs.bmask if obs.has_bmask() else None,
         ormask=obs.ormask if obs.has_ormask() else None,
         noise=obs.noise if obs.has_noise() else None,
-        jacobian=jax_galsim.BaseWCS().from_galsim(jacobian.get_galsim_wcs()),
+        aft=jax_galsim.wcs.AffineTransform(
+            dudx=jacobian.dudcol,
+            dudy=jacobian.dudrow,
+            dvdx=jacobian.dvdcol,
+            dvdy=jacobian.dvdrow,
+            origin=jax_galsim.PositionD(
+                y=jacobian.row0 + 1,
+                x=jacobian.col0 + 1,
+            ),
+        ),
         psf=psf,
-        meta=obs.meta,  # Directly copy metadata
+        meta=obs.meta,
         mfrac=obs.mfrac if obs.has_mfrac() else None,
         store_pixels=getattr(obs, "store_pixels", True),
         ignore_zero_weight=getattr(obs, "ignore_zero_weight", True),
-        jac_row0=jacobian.row0,
-        jac_col0=jacobian.col0,
-        jac_det=jacobian.det,
-        jac_scale=jacobian.scale,
     )
 
 
@@ -113,15 +109,13 @@ def dfmd_obs_to_ngmix_obs(dfmd_obs) -> Observation:
         bmask=dfmd_obs.bmask,
         ormask=dfmd_obs.ormask,
         noise=dfmd_obs.noise if dfmd_obs.noise is None else np.array(dfmd_obs.noise),
-        jacobian=Jacobian(
-            row=dfmd_obs.jac_row0,
-            col=dfmd_obs.jac_col0,
-            dudcol=dfmd_obs.jacobian.dudx,
-            dudrow=dfmd_obs.jacobian.dudy,
-            dvdcol=dfmd_obs.jacobian.dvdx,
-            dvdrow=dfmd_obs.jacobian.dvdy,
-            det=dfmd_obs.jac_det,
-            scale=dfmd_obs.jac_scale,
+        jacobian=ngmix.jacobian.Jacobian(
+            row=dfmd_obs.aft.origin.y - 1,
+            col=dfmd_obs.aft.origin.x - 1,
+            dudcol=dfmd_obs.aft.dudx,
+            dudrow=dfmd_obs.aft.dudy,
+            dvdcol=dfmd_obs.aft.dvdx,
+            dvdrow=dfmd_obs.aft.dvdy,
         ),
         psf=psf,
         mfrac=dfmd_obs.mfrac if dfmd_obs.mfrac is None else np.array(dfmd_obs.mfrac),

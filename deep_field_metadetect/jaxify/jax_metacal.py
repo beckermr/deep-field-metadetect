@@ -116,10 +116,10 @@ def _jax_render_psf_and_build_obs(image, dfmd_obs, reconv_psf, nxy_psf, weight_f
     pim = reconv_psf.drawImage(
         nx=nxy_psf,
         ny=nxy_psf,
-        wcs=dfmd_obs.psf.jacobian,
+        wcs=dfmd_obs.aft._local_wcs,
         offset=jax_galsim.PositionD(
-            x=dfmd_obs.psf.jac_col0 + 1 - nxy_psf / 2,
-            y=dfmd_obs.psf.jac_row0 + 1 - nxy_psf / 2,
+            x=dfmd_obs.aft.origin.x - nxy_psf / 2,
+            y=dfmd_obs.aft.origin.y - nxy_psf / 2,
         ),
     ).array
 
@@ -170,7 +170,7 @@ def _jax_metacal_op_g1g2_impl(*, wcs, image, noise, psf_inv, dims, reconv_psf, g
 def jax_metacal_op_g1g2(dfmd_obs, reconv_psf, g1, g2, nxy_psf):
     """Run metacal on an dfmd obs."""
     mcal_image = _jax_metacal_op_g1g2_impl(
-        wcs=dfmd_obs.jacobian,
+        wcs=dfmd_obs.aft._local_wcs,
         image=get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind="image"),
         # we rotate by 90 degrees on the way in and then _metacal_op_g1g2_impl
         # rotates back after deconv and shearing
@@ -211,7 +211,7 @@ def jax_metacal_op_shears(
             step=step,
         )
 
-    wcs = dfmd_obs.jacobian
+    wcs = dfmd_obs.aft._local_wcs
     image = get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind="image")
     # we rotate by 90 degrees on the way in and then _metacal_op_g1g2_impl
     # rotates back after deconv and shearing
@@ -247,7 +247,7 @@ def jax_metacal_op_shears(
 @partial(jax.jit, static_argnames=["nxy", "nxy_psf"])
 def jax_match_psf(dfmd_obs, reconv_psf, nxy, nxy_psf):
     """Match the PSF on an dfmd observation to a new PSF."""
-    wcs = dfmd_obs.jacobian
+    wcs = dfmd_obs.aft._local_wcs
     image = get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind="image")
     psf = get_jax_galsim_object_from_dfmd_obs(dfmd_obs.psf, kind="image")
 
@@ -277,10 +277,10 @@ def jax_add_dfmd_obs(
 ) -> DFMdetObservation:
     """Add two dfmd observations"""
 
-    if repr(dfmd_obs1.jacobian) != repr(dfmd_obs2.jacobian):
+    if repr(dfmd_obs1.aft) != repr(dfmd_obs2.aft):
         raise RuntimeError(
             "Jacobians must be equal to add dfmd observations! %s != %s"
-            % (repr(dfmd_obs1.jacobian), repr(dfmd_obs2.jacobian)),
+            % (repr(dfmd_obs1.aft), repr(dfmd_obs2.aft)),
         )
 
     if dfmd_obs1.image.shape != dfmd_obs2.image.shape:
@@ -353,21 +353,12 @@ def jax_add_dfmd_obs(
         bmask=new_bmask,
         ormask=new_ormask,
         noise=new_noise,
-        jacobian=jax_galsim.wcs.JacobianWCS(
-            dudx=dfmd_obs1.jacobian.dudx,
-            dudy=dfmd_obs1.jacobian.dudy,
-            dvdx=dfmd_obs1.jacobian.dvdx,
-            dvdy=dfmd_obs1.jacobian.dvdy,
-        ),
+        aft=dfmd_obs1.aft,
         psf=new_psf,
-        meta=new_meta_data,  # Directly copy metadata
+        meta=new_meta_data,
         mfrac=new_mfrac,
         store_pixels=getattr(dfmd_obs1, "store_pixels", True),
         ignore_zero_weight=getattr(dfmd_obs1, "ignore_zero_weight", True),
-        jac_row0=dfmd_obs1.jac_row0,
-        jac_col0=dfmd_obs1.jac_col0,
-        jac_det=dfmd_obs1.jac_det,
-        jac_scale=dfmd_obs1.jac_scale,
     )
 
     return obs
@@ -378,7 +369,7 @@ def get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind="image", rot90=0):
     return jax_galsim.InterpolatedImage(
         jax_galsim.ImageD(
             jnp.rot90(getattr(dfmd_obs, kind).copy(), k=rot90),
-            wcs=dfmd_obs.jacobian,
+            wcs=dfmd_obs.aft._local_wcs,
         ),
         x_interpolant="lanczos15",
     )
@@ -386,7 +377,7 @@ def get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind="image", rot90=0):
 
 def get_jax_galsim_object_from_dfmd_obs_nopix(dfmd_obs, kind="image"):
     """Make an interpolated image from an DFMdet obs w/o a pixel."""
-    wcs = dfmd_obs.jacobian
+    wcs = dfmd_obs.aft._local_wcs
     return jax_galsim.Convolve(
         [
             get_jax_galsim_object_from_dfmd_obs(dfmd_obs, kind=kind),
