@@ -279,7 +279,7 @@ def jax_add_dfmd_obs(
 
     if repr(dfmd_obs1.aft) != repr(dfmd_obs2.aft):
         raise RuntimeError(
-            "Jacobians must be equal to add dfmd observations! %s != %s"
+            "AffineTransforms must be equal to add dfmd observations! %s != %s"
             % (repr(dfmd_obs1.aft), repr(dfmd_obs2.aft)),
         )
 
