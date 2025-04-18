@@ -182,7 +182,7 @@ def test_metadetect_single_band_deep_field_metadetect_jax_vs_ngmix(deep_psf_rati
     nsims = 5
     noise_fac = 1 / np.sqrt(30)
 
-    rng = np.random.RandomState(seed=3412)
+    rng = np.random.RandomState(seed=34132)
     seeds = rng.randint(size=nsims, low=1, high=2**29)
     res_p = []
     res_m = []
@@ -390,6 +390,8 @@ def test_metadetect_single_band_deep_field_metadetect(deep_psf_ratio):
         jackknife=len(res_p),
     )
 
+    assert np.isfinite(m)
+    assert np.isfinite(merr)
     print_m_c(m, merr, c1, c1err, c2, c2err)
     assert_m_c_ok(m, merr, c1, c1err, c2, c2err)
 
