@@ -116,10 +116,10 @@ def _jax_render_psf_and_build_obs(image, dfmd_obs, reconv_psf, nxy_psf, weight_f
     pim = reconv_psf.drawImage(
         nx=nxy_psf,
         ny=nxy_psf,
-        wcs=dfmd_obs.aft._local_wcs,
+        wcs=dfmd_obs.psf.aft._local_wcs,
         offset=jax_galsim.PositionD(
-            x=dfmd_obs.aft.origin.x - nxy_psf / 2,
-            y=dfmd_obs.aft.origin.y - nxy_psf / 2,
+            x=dfmd_obs.psf.aft.origin.x - nxy_psf / 2,
+            y=dfmd_obs.psf.aft.origin.y - nxy_psf / 2,
         ),
     ).array
 
