@@ -96,22 +96,30 @@ def _run_single_sim_jax_and_ngmix(
     skip_wide,
     skip_deep,
 ):
-    nxy = 53
+    nxy = 201
     nxy_psf = 53
     scale = 0.2
 
+    # Creating ngmix and dfmdet observations
     obs_w_ngmix, obs_d_ngmix, obs_dn_ngmix = make_simple_sim(
         seed=seed,
         g1=g1,
         g2=g2,
         s2n=s2n,
+        deep_noise_fac=deep_noise_fac,
+        deep_psf_fac=deep_psf_fac,
         dim=nxy,
         dim_psf=nxy_psf,
         scale=scale,
-        deep_noise_fac=deep_noise_fac,
-        deep_psf_fac=deep_psf_fac,
+        buff=25,
+        n_objs=10,
         return_dfmd_obs=False,
     )
+
+    obs_w = ngmix_obs_to_dfmd_obs(obs_w_ngmix)
+    obs_d = ngmix_obs_to_dfmd_obs(obs_d_ngmix)
+    obs_dn = ngmix_obs_to_dfmd_obs(obs_dn_ngmix)
+
     res_ngmix = single_band_deep_field_metadetect(
         obs_w_ngmix,
         obs_d_ngmix,
@@ -120,16 +128,12 @@ def _run_single_sim_jax_and_ngmix(
         skip_obs_deep_corrections=skip_deep,
     )
 
-    obs_w = ngmix_obs_to_dfmd_obs(obs_w_ngmix)
-    obs_d = ngmix_obs_to_dfmd_obs(obs_d_ngmix)
-    obs_dn = ngmix_obs_to_dfmd_obs(obs_dn_ngmix)
-
     res = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
-        nxy=53,
-        nxy_psf=53,
+        nxy=nxy,
+        nxy_psf=nxy_psf,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
         scale=scale,
