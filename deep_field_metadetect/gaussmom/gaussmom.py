@@ -410,7 +410,6 @@ class GaussMom:
             maxrad=maxrad,
             with_higher_order=with_higher_order,
         )
-        # e1e2T = mom2e(res[2], res[3], res[4])
 
         area = gaussmom_obs.area
         fac = 1 / area

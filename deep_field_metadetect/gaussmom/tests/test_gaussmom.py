@@ -212,35 +212,36 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
 #     assert np.abs(rho4_mean - 2) < 1e-5
 
 
-# def test_gaussmom_flags():
-#     """
-#     test we get flags for very noisy data
-#     """
-#     rng = np.random.RandomState(seed=100)
+def test_gaussmom_flags():
+    """
+    test we get flags for very noisy data
+    """
+    rng = np.random.RandomState(seed=100)
 
-#     ntrial = 10
-#     noise = 100000
-#     scale = 0.263
-#     dims = [32]*2
-#     weight = np.zeros(dims) + 1.0/noise**2
+    ntrial = 10
+    noise = 100000
+    scale = 0.263
+    dims = [32] * 2
+    weight = np.zeros(dims) + 1.0 / noise**2
 
-#     cen = (np.array(dims)-1)/2
-#     jacobian = ngmix.DiagonalJacobian(row=cen[0], col=cen[1], scale=scale)
+    cen = (np.array(dims) - 1) / 2
+    jacobian = ngmix.DiagonalJacobian(row=cen[0], col=cen[1], scale=scale)
 
-#     flags = np.zeros(ntrial)
-#     for i in range(ntrial):
+    flags = np.zeros(ntrial)
+    for i in range(ntrial):
+        im = rng.normal(scale=noise, size=dims)
 
-#         im = rng.normal(scale=noise, size=dims)
+        ngmix_obs = Observation(
+            image=im,
+            weight=weight,
+            jacobian=jacobian,
+        )
 
-#         obs = Observation(
-#             image=im,
-#             weight=weight,
-#             jacobian=jacobian,
-#         )
+        gaussmom_obs = obs_to_gaussmom_obs(obs=ngmix_obs)
 
-#         fitter = GaussMom(fwhm=1.2)
+        fitter = GaussMom(fwhm=1.2)
 
-#         res = fitter.go(obs)
-#         flags[i] = res['flags']
+        res = fitter.go(gaussmom_obs)
+        flags[i] = res.flags
 
-#     assert np.any(flags != 0)
+    assert np.any(flags != 0)
