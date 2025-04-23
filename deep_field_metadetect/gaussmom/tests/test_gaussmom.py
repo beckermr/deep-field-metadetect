@@ -1,4 +1,5 @@
 import galsim
+import jax.numpy as jnp
 import ngmix
 import numpy as np
 import pytest
@@ -7,7 +8,13 @@ from ngmix.gaussmom import GaussMom as NgmixGaussMom
 from ngmix.moments import fwhm_to_T
 from ngmix.shape import e1e2_to_g1g2
 
-from deep_field_metadetect.gaussmom.gaussmom import GaussMom
+from deep_field_metadetect.gaussmom.gaussmom import (
+    GaussMom,
+    _compute_shape_params,
+    _diag_all_true,
+    _set_fluxerr_s2n_flux_flags,
+    _set_T_Terr_Tflags,
+)
 from deep_field_metadetect.gaussmom.gaussmom_core import obs_to_gaussmom_obs
 
 
@@ -245,3 +252,202 @@ def test_gaussmom_flags():
         flags[i] = res.flags
 
     assert np.any(flags != 0)
+
+
+# Test _set_fluxerr_s2n_flux_flags
+def test_set_fluxerr_s2n_flux_flags_positive_var():
+    res_flux = 10.0
+    cov = jnp.eye(3) * 4.0
+    res_flux_flags = 0
+    mf_ind = 1
+
+    res_flux_err, res_s2n, flags = _set_fluxerr_s2n_flux_flags(
+        res_flux, cov, res_flux_flags, mf_ind
+    )
+
+    assert jnp.isclose(res_flux_err, 2.0)
+    assert jnp.isclose(res_s2n, 5.0)
+    assert flags == 0
+
+
+def test_set_fluxerr_s2n_flux_flags_nonpos_var():
+    res_flux = 10.0
+    cov = jnp.array([[4.0, 0, 0], [0, -1.0, 0], [0, 0, 1.0]])
+    res_flux_flags = 0
+    mf_ind = 1
+
+    res_flux_err, res_s2n, flags = _set_fluxerr_s2n_flux_flags(
+        res_flux, cov, res_flux_flags, mf_ind
+    )
+
+    assert jnp.isnan(res_flux_err)
+    assert jnp.isnan(res_s2n)
+    assert flags == ngmix.flags.NONPOS_VAR
+
+
+# Test _set_T_Terr_Tflags
+def test_set_T_Terr_Tflags_valid():
+    sums = jnp.array([20.0, 10.0])  # mt, mf
+    sums_cov = jnp.array([[4.0, 1.0], [1.0, 9.0]])
+    mt_ind = 0
+    mf_ind = 1
+    res_T_flags = 0
+
+    res_T, res_T_err, flags = _set_T_Terr_Tflags(
+        sums, sums_cov, mt_ind, mf_ind, res_T_flags
+    )
+
+    assert jnp.isclose(res_T, 2.0)
+    assert jnp.isfinite(res_T_err)
+    assert flags == 0
+
+
+def test_set_T_Terr_Tflags_nonpos_variance():
+    sums = jnp.array([20.0, 10.0])
+    sums_cov = jnp.array([[4.0, 1.0], [1.0, -1.0]])  # mf variance non-positive
+    mt_ind = 0
+    mf_ind = 1
+    res_T_flags = 0
+
+    res_T, res_T_err, flags = _set_T_Terr_Tflags(
+        sums, sums_cov, mt_ind, mf_ind, res_T_flags
+    )
+
+    assert jnp.isnan(res_T)
+    assert jnp.isnan(res_T_err)
+    assert flags == ngmix.flags.NONPOS_VAR
+
+
+def test_set_T_Terr_Tflags_nonpos_flux():
+    sums = jnp.array([20.0, -5.0])  # Negative flux
+    sums_cov = jnp.array([[4.0, 1.0], [1.0, 9.0]])
+    mt_ind = 0
+    mf_ind = 1
+    res_T_flags = 0
+
+    res_T, res_T_err, flags = _set_T_Terr_Tflags(
+        sums, sums_cov, mt_ind, mf_ind, res_T_flags
+    )
+
+    assert jnp.isnan(res_T)
+    assert jnp.isnan(res_T_err)
+    assert flags == ngmix.flags.NONPOS_FLUX
+
+
+# Test  _diag_all_true
+
+
+def test_diag_all_true_valid_cov():
+    cov = jnp.diag(jnp.array([1.0, 4.0, 9.0, 16.0, 25.0, 36.0]))
+    res_flags = 0
+
+    diag, flags = _diag_all_true(cov, res_flags)
+
+    expected = jnp.array([1, 2, 3, 4, 5, 6], dtype=jnp.float32)
+
+    assert jnp.allclose(diag, expected)
+    assert flags == 0
+
+
+def test_diag_all_true_invalid_cov():
+    cov = jnp.diag(
+        jnp.array([1.0, 4.0, 0.0, 16.0, -5.0, 36.0])
+    )  # contains zero and negative
+    res_flags = 0
+
+    diag, flags = _diag_all_true(cov, res_flags)
+
+    assert jnp.all(jnp.isnan(diag))
+    assert flags == ngmix.flags.NONPOS_VAR
+
+
+def test_diag_all_true_invalid_cov_with_existing_flags():
+    cov = jnp.diag(jnp.array([1.0, -2.0, 9.0, 16.0, 25.0, 36.0]))
+    res_flags = 8  # arbitrary existing flags
+
+    diag, flags = _diag_all_true(cov, res_flags)
+
+    assert jnp.all(jnp.isnan(diag))
+    assert flags == (8 | ngmix.flags.NONPOS_VAR)
+
+
+# Test _compute_shape_params()
+
+
+def test_compute_shape_valid():
+    sums = jnp.array([0.2, 0.3, 10.0])  # m1, m2, T
+    sums_cov = jnp.eye(3) * 0.01
+    m1, m2, mt = 0, 1, 2
+    res_T = 10.0
+    res_flux = 5.0
+    res_flags = 0
+
+    res_e, e_err, e_cov, flags = _compute_shape_params(
+        sums, sums_cov, m1, m2, mt, res_T, res_flux, res_flags
+    )
+
+    assert jnp.all(jnp.isfinite(res_e))
+    assert jnp.all(jnp.isfinite(e_err))
+    assert jnp.all(jnp.isfinite(e_cov))
+    assert flags == 0
+
+
+def test_compute_shape_nonpositive_flux():
+    sums = jnp.array([0.2, 0.3, 10.0])
+    sums_cov = jnp.eye(3) * 0.01
+    m1, m2, mt = 0, 1, 2
+    res_T = 10.0
+    res_flux = 0.0
+    res_flags = 0
+
+    _, _, _, flags = _compute_shape_params(
+        sums, sums_cov, m1, m2, mt, res_T, res_flux, res_flags
+    )
+    assert flags & ngmix.flags.NONPOS_FLUX
+
+
+def test_compute_shape_nonpositive_T():
+    sums = jnp.array([0.2, 0.3, 0.0])
+    sums_cov = jnp.eye(3) * 0.01
+    m1, m2, mt = 0, 1, 2
+    res_T = 0.0
+    res_flux = 5.0
+    res_flags = 0
+
+    _, _, _, flags = _compute_shape_params(
+        sums, sums_cov, m1, m2, mt, res_T, res_flux, res_flags
+    )
+    assert flags & ngmix.flags.NONPOS_SIZE
+
+
+def test_compute_shape_nonfinite_error():
+    # Force NaN in e_err
+    sums = jnp.array([0.2, 0.3, 10.0])
+    sums_cov = jnp.array([[jnp.nan, 0.0, 0.0], [0.0, jnp.nan, 0.0], [0.0, 0.0, 0.01]])
+    m1, m2, mt = 1, 1, 2
+    res_T = 10.0
+    res_flux = 5.0
+    res_flags = 0
+
+    _, _, _, flags = _compute_shape_params(
+        sums, sums_cov, m1, m2, mt, res_T, res_flux, res_flags
+    )
+    assert flags & ngmix.flags.NONPOS_SHAPE_VAR
+
+
+def test_compute_shape_early_exit_on_flags():
+    sums = jnp.array([0.2, 0.3, 10.0])
+    sums_cov = jnp.eye(3) * 0.01
+    m1, m2, mt = 1, 1, 2
+    res_T = 10.0
+    res_flux = 5.0
+    res_flags = 4  # Already set some flag
+
+    res_e, e_err, e_cov, flags = _compute_shape_params(
+        sums, sums_cov, m1, m2, mt, res_T, res_flux, res_flags
+    )
+
+    assert jnp.all(jnp.isnan(res_e))
+    assert jnp.all(jnp.isnan(e_err))
+    assert jnp.all(jnp.isnan(jnp.diag(e_cov)))
+    assert flags == res_flags

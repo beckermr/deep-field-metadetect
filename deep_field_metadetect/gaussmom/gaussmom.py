@@ -40,67 +40,35 @@ def create_circular_mask(umod, vmod, maxrad):
     return mask.astype(int)
 
 
-@jax.jit
-def get_weighted_moments_stats(
-    gaussmom_obs: GaussMomObs, sums, sums_cov, npix, sums_norm=None
-):
-    """Make a fitting results dict from a set of unnormalized moments.
-
-    Note this function does not check shapes
-    or call the _add_moments_by_name function of ngmix
+def _set_fluxerr_s2n_flux_flags(res_flux, sums_cov, res_flux_flags, mf_ind):
+    """Compute the flux error and signal-to-noise ratio (S/N),
+    and update measurement flags
 
     Parameters
     ----------
-    gaussmom_obs : GaussmomObs object
-        see deepfield_meta_detect.gaussmom.GaussMomObs
-    sums : jnp.ndarray
-        The array of unnormalized moments in the order [Mv, Mu, M1, M2, MT, MF].
-    sums_cov : jnp.ndarray
-        The array of unnormalized moment covariances.
-    npix: int
-        number of pixels within maxrad
-    sums_norm : float, optional
-        The sum of the moment weight function itself. This is added to the output data.
-        The default of None puts in NaN.
+    res_flux : float
+        The measured flux value
+    sums_cov : ndarray
+        Covariance matrix for the moment sums
+    res_flux_flags : int
+        Initial bitmask flags associated with the flux measurement
+    mf_ind : int
+        Index in `sums` corresponding to mf
 
     Returns
     -------
-    res: GaussmomData Object
-        Results
+    res_flux_err : jnp.float
+        Estimated uncertainty on the flux, or NaN if the variance
+        is non-positive
+    res_s2n : jnp.float
+        Signal-to-noise ratio (flux divided by its error),
+        or NaN if the variance is non-positive
+    res_flux_flags : int
+        Updated flags indicating the validity of the flux error computation
+        If the flux variance is non-positive,
+        `ngmix.flags.NONPOS_VAR` is set in `res_flux_flags`.
     """
-    valid_shapes = (sums.shape[0] in (6, 17)) & (sums_cov.shape in [(6, 6), (17, 17)])
-    sums = jnp.where(valid_shapes, sums, jnp.nan)
-    sums_cov = jnp.where(valid_shapes, sums_cov, jnp.nan)
 
-    mv_ind = MOMENTS_NAME_MAP["Mv"]
-    mu_ind = MOMENTS_NAME_MAP["Mu"]
-    mf_ind = MOMENTS_NAME_MAP["MF"]
-    mt_ind = MOMENTS_NAME_MAP["MT"]
-    m1_ind = MOMENTS_NAME_MAP["M1"]
-    m2_ind = MOMENTS_NAME_MAP["M2"]
-
-    res_flags = 0
-
-    res_flux = sums[mf_ind]
-    res_sums = sums
-    res_sums_cov = sums_cov
-    res_sums_norm = sums_norm if sums_norm is not None else jnp.nan
-    res_flux_flags = 0
-
-    res_T_flags = 0
-
-    res_flux_err = jnp.nan
-    res_T = jnp.nan
-    res_T_err = jnp.nan
-    res_s2n = jnp.nan
-    res_e1 = jnp.nan
-    res_e2 = jnp.nan
-    res_e = jnp.array([jnp.nan, jnp.nan])
-    res_e_err = jnp.array([jnp.nan, jnp.nan])
-    res_e_cov = jnp.diag(jnp.array([jnp.nan, jnp.nan]))
-    res_sums_err = jnp.full(6, jnp.nan)
-
-    # Flux only
     def pos_var_fn(_):
         res_flux_err = jnp.sqrt(sums_cov[mf_ind, mf_ind])
         res_s2n = res_flux / res_flux_err
@@ -108,16 +76,47 @@ def get_weighted_moments_stats(
 
     def nonpos_var_fn(_):
         res_flux_flags_new = res_flux_flags | ngmix.flags.NONPOS_VAR
-        return res_flux_err, res_s2n, res_flux_flags_new
+        return jnp.nan, jnp.nan, res_flux_flags_new
 
-    res_flux_err, res_s2n, res_flux_flags = jax.lax.cond(
+    return jax.lax.cond(
         sums_cov[mf_ind, mf_ind] > 0,
         pos_var_fn,
         nonpos_var_fn,
         operand=None,
     )
 
-    # Flux + T only
+
+def _set_T_Terr_Tflags(sums, sums_cov, mt_ind, mf_ind, res_T_flags):
+    """
+    Compute the size parameter `T`, its associated error `Terr`,
+    and update measurement flags.
+
+    Parameters
+    ----------
+    sums : jax.numpy.ndrray
+        Computer moment sums
+    sums_cov : jax.numpy.ndrray
+        Covariance matrix associated with the `sums` values
+    mt_ind : int
+        Index in `sums` corresponding to mt
+    mf_ind : int
+        Index in `sums` corresponding to mf
+    res_T_flags : int
+        Initial bitmask flags for the `T` measurement
+
+    Returns
+    -------
+    res_T : float
+        The computed T value or NaN if computation was invalid
+    res_T_err : float
+        The estimated uncertainty on T, or NaN if computation was invalid
+    res_T_flags : int
+        Updated measurement flags.
+        Flags such as `ngmix.flags.NONPOS_FLUX`
+        and `ngmix.flags.NONPOS_VAR` are set when
+        flux or variance values are non-positive, respectively.
+    """
+
     def pos_var_fn(_):
         def pos_flux_fn(_):
             res_T = sums[mt_ind] / sums[mf_ind]
@@ -131,10 +130,8 @@ def get_weighted_moments_stats(
             return res_T, res_T_err, res_T_flags
 
         def nonpos_flux_fn(_):
-            # res_T = jnp.nan
-            # res_T_err = jnp.nan
             new_res_T_flags = res_T_flags | ngmix.flags.NONPOS_FLUX
-            return res_T, res_T_err, new_res_T_flags
+            return jnp.nan, jnp.nan, new_res_T_flags
 
         return jax.lax.cond(
             sums[mf_ind] > 0,
@@ -144,36 +141,93 @@ def get_weighted_moments_stats(
         )
 
     def nonpos_var_fn(_):
-        # res_T = jnp.nan
-        # res_T_err = jnp.nan
         new_res_T_flags = res_T_flags | ngmix.flags.NONPOS_VAR
-        return res_T, res_T_err, new_res_T_flags
+        return jnp.nan, jnp.nan, new_res_T_flags
 
-    res_T, res_T_err, res_T_flags = jax.lax.cond(
+    return jax.lax.cond(
         (sums_cov[mf_ind, mf_ind] > 0) & (sums_cov[mt_ind, mt_ind] > 0),
         pos_var_fn,
         nonpos_var_fn,
         operand=None,
     )
 
-    # now handle full flags
+
+def _diag_all_true(sums_cov, res_flags):
+    """Validates that all diagonal elements of the covariance matrix are positive
+
+    Parameters
+    ----------
+    sums_cov : jax.numpy.ndarray
+        Covariance matrix corresponding to 'sums'
+    res_flags : int
+        Bitwise flag indicating the current computation status.
+
+    Returns
+    -------
+    res_sums_err : jax.numpy.ndarray
+        1D array of square root of diagonal of `sums_cov`,
+        or NaNs if any diagonal element is non-positive.
+    res_flags : int
+        Updated flags.
+        If any variance is non-positive,
+        `NONPOS_VAR` is added to the flag bitmask.
+    """
+
     def diag_all_true(_):
         return jnp.sqrt(jnp.diagonal(sums_cov)), res_flags
 
     def diag_not_all_true(_):
-        # return deault values,
-        # and update flags with NONPOS_VAR bit
         return jnp.full(6, jnp.nan), res_flags | ngmix.flags.NONPOS_VAR
 
-    res_sums_err, res_flags = jax.lax.cond(
+    return jax.lax.cond(
         jnp.all(jnp.diagonal(sums_cov) > 0),
         diag_all_true,
         diag_not_all_true,
         operand=None,
     )
 
-    # Second branch: if flags are still 0, then check flux, then T,
-    # then compute the shape params
+
+def _compute_shape_params(
+    sums, sums_cov, m1_ind, m2_ind, mt_ind, res_T, res_flux, res_flags
+):
+    """
+    Computes shape parameters (ellipticities) and their uncertainties
+    using JAX-compatible control flow.
+
+    Parameters
+    ----------
+    sums : jax.numpy.ndarray
+        Array of image moment sums
+    sums_cov : jax.numpy.ndarray
+        Covariance matrix corresponding to `sums`
+    m1_ind : int
+        Index into `sums` for m1
+    m2_ind : int
+        Index into `sums` for m2
+    mt_ind : int
+        Index into `sums` for the trace
+    res_T : float
+        Estimated size (trace of second moment matrix)
+    res_flux : float
+        Estimated flux
+    res_flags : int
+        Bitwise flag indicating prior computation status.
+        If non-zero, computation is skipped
+
+    Returns
+    -------
+    res_e : jax.numpy.ndarray
+        Estimated ellipticity components [e1, e2] or NaNs if computation is invalid
+    res_e_err : jax.numpy.ndarray
+        Estimated errors for ellipticity components, or NaNs if invalid
+    res_e_cov : jax.numpy.ndarray
+        2x2 diagonal covariance matrix for ellipticity components,
+        or diag NaNs if invalid
+    res_flags : int
+        Updated flag bitmask.
+        Set if inputs are invalid (refer to the notes below)
+    """
+
     def valid_flags_fn(_):
         def flux_positive_fn(_):
             # If flux > 0 then check if T > 0
@@ -256,12 +310,93 @@ def get_weighted_moments_stats(
             res_flags,
         )
 
-    res_e, res_e_err, res_e_cov, res_flags = jax.lax.cond(
+    return jax.lax.cond(
         res_flags == 0,
         valid_flags_fn,
         invalid_flags_fn,
         operand=None,
     )
+
+
+@jax.jit
+def get_weighted_moments_stats(
+    gaussmom_obs: GaussMomObs, sums, sums_cov, npix, sums_norm=None
+):
+    """Make a fitting results dict from a set of unnormalized moments.
+
+    Note this function does not check shapes
+    or call the _add_moments_by_name function of ngmix
+
+    Parameters
+    ----------
+    gaussmom_obs : GaussmomObs object
+        see deepfield_meta_detect.gaussmom.GaussMomObs
+    sums : jnp.ndarray
+        The array of unnormalized moments in the order [Mv, Mu, M1, M2, MT, MF].
+    sums_cov : jnp.ndarray
+        The array of unnormalized moment covariances.
+    npix: int
+        number of pixels within maxrad
+    sums_norm : float, optional
+        The sum of the moment weight function itself. This is added to the output data.
+        The default of None puts in NaN.
+
+    Returns
+    -------
+    res: GaussmomData Object
+        Results
+    """
+    valid_shapes = (sums.shape[0] in (6, 17)) & (sums_cov.shape in [(6, 6), (17, 17)])
+    sums = jnp.where(valid_shapes, sums, jnp.nan)
+    sums_cov = jnp.where(valid_shapes, sums_cov, jnp.nan)
+
+    mv_ind = MOMENTS_NAME_MAP["Mv"]
+    mu_ind = MOMENTS_NAME_MAP["Mu"]
+    mf_ind = MOMENTS_NAME_MAP["MF"]
+    mt_ind = MOMENTS_NAME_MAP["MT"]
+    m1_ind = MOMENTS_NAME_MAP["M1"]
+    m2_ind = MOMENTS_NAME_MAP["M2"]
+
+    res_flags = 0
+
+    res_flux = sums[mf_ind]
+    res_sums = sums
+    res_sums_cov = sums_cov
+    res_sums_norm = sums_norm if sums_norm is not None else jnp.nan
+    res_flux_flags = 0
+
+    res_T_flags = 0
+
+    res_flux_err = jnp.nan
+    res_T = jnp.nan
+    res_T_err = jnp.nan
+    res_s2n = jnp.nan
+    res_e1 = jnp.nan
+    res_e2 = jnp.nan
+    res_e = jnp.array([jnp.nan, jnp.nan])
+    res_e_err = jnp.array([jnp.nan, jnp.nan])
+    res_e_cov = jnp.diag(jnp.array([jnp.nan, jnp.nan]))
+    res_sums_err = jnp.full(6, jnp.nan)
+
+    # Flux only
+    res_flux_err, res_s2n, res_flux_flags = _set_fluxerr_s2n_flux_flags(
+        res_flux, sums_cov, res_flux_flags, mf_ind
+    )
+
+    # compute T
+    res_T, res_T_err, res_T_flags = _set_T_Terr_Tflags(
+        sums, sums_cov, mt_ind, mf_ind, res_T_flags
+    )
+
+    # Check if all diag elements of cov is True
+    res_sums_err, res_flags = _diag_all_true(sums_cov, res_flags)
+
+    # If flags are still 0, then check flux, then T
+    # then compute the shape params if everything is ok
+    res_e, res_e_err, res_e_cov, res_flags = _compute_shape_params(
+        sums, sums_cov, m1_ind, m2_ind, mt_ind, res_T, res_flux, res_flags
+    )
+
     res_e1 = res_e[0]
     res_e2 = res_e[1]
 
