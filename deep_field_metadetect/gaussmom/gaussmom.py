@@ -505,7 +505,7 @@ def get_ratio_var(a, b, var_a, var_b, cov_ab):
 
     var = rsq * (var_a / a**2 + var_b / b**2 - 2 * cov_ab / (a * b))
 
-    # var = jnp.where(var>1e100, jnp.inf, var)
+    var = jnp.where(var > 1e20, jnp.nan, var)
     return var
 
 
@@ -513,7 +513,6 @@ def get_ratio_var(a, b, var_a, var_b, cov_ab):
 class GaussMom:
     fwhm: float
     with_higher_order: bool = False
-    kind: str = "wmom"
 
     def _set_mompars(self, gaussmom_obs: GaussMomObs):
         T = fwhm_to_T(self.fwhm)
