@@ -15,7 +15,7 @@ from deep_field_metadetect.gaussmom.gaussmom_core import (
 
 
 @jax.jit
-def fwhm_to_sigma(fwhm: float):
+def _fwhm_to_sigma(fwhm: float):
     """
     convert fwhm to sigma for a gaussian
     """
@@ -23,11 +23,11 @@ def fwhm_to_sigma(fwhm: float):
 
 
 @jax.jit
-def fwhm_to_T(fwhm):
+def _fwhm_to_T(fwhm):
     """
     convert fwhm to T for a gaussian
     """
-    sigma = fwhm_to_sigma(fwhm)
+    sigma = _fwhm_to_sigma(fwhm)
     return 2 * sigma**2
 
 
@@ -515,7 +515,7 @@ class GaussMom:
     with_higher_order: bool = False
 
     def _set_mompars(self, gaussmom_obs: GaussMomObs):
-        T = fwhm_to_T(self.fwhm)
+        T = _fwhm_to_T(self.fwhm)
         mompars = [0, 0, T / 2, 0, T / 2]
 
         wt_noimage, wt_norm = _eval_gauss2d(
@@ -526,7 +526,7 @@ class GaussMom:
 
     def go(self, gaussmom_obs, maxrad=None, with_higher_order: bool = False):
         if maxrad is None:
-            T = fwhm_to_T(fwhm=self.fwhm)
+            T = _fwhm_to_T(fwhm=self.fwhm)
             sigma = np.sqrt(T / 2)
             maxrad = 100 * sigma
         res = self._measure_moments(
