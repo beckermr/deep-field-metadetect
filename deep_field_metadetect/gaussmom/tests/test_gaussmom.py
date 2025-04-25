@@ -123,13 +123,27 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
         ngmix_res = fitter.go(obs=ngmix_obs)
 
         # Compare ngmix VS jax versions
-        np.testing.assert_allclose(res.sums, ngmix_res["sums"], atol=1e-9)
-        np.testing.assert_allclose(res.sums_cov, ngmix_res["sums_cov"], atol=1e-9)
-        np.testing.assert_allclose(res.e[0], ngmix_res["e"][0], atol=1e-9)
-        np.testing.assert_allclose(res.e[1], ngmix_res["e"][1], atol=1e-9)
+        np.testing.assert_allclose(res.sums, ngmix_res["sums"], atol=1e-10)
+        np.testing.assert_allclose(res.sums_cov, ngmix_res["sums_cov"], atol=1e-10)
+        np.testing.assert_allclose(res.e[0], ngmix_res["e"][0], atol=1e-10)
+        np.testing.assert_allclose(res.e[1], ngmix_res["e"][1], atol=1e-10)
         np.testing.assert_allclose(res.s2n, ngmix_res["s2n"])
         np.testing.assert_allclose(res.flux, ngmix_res["flux"])
         np.testing.assert_allclose(res.pars[4], ngmix_res["pars"][4])
+
+        np.testing.assert_allclose(res.Mv, ngmix_res["Mv"], atol=1e-10)
+        np.testing.assert_allclose(res.Mu, ngmix_res["Mu"], atol=1e-10)
+        np.testing.assert_allclose(res.M1, ngmix_res["M1"], atol=1e-10)
+        np.testing.assert_allclose(res.M2, ngmix_res["M2"], atol=1e-10)
+        np.testing.assert_allclose(res.MT, ngmix_res["MT"], atol=1e-10)
+        np.testing.assert_allclose(res.MF, ngmix_res["MF"], atol=1e-10)
+
+        np.testing.assert_allclose(res.Mv_err, ngmix_res["Mv_err"], atol=1e-10)
+        np.testing.assert_allclose(res.Mu_err, ngmix_res["Mu_err"], atol=1e-10)
+        np.testing.assert_allclose(res.M1_err, ngmix_res["M1_err"], atol=1e-10)
+        np.testing.assert_allclose(res.M2_err, ngmix_res["M2_err"], atol=1e-10)
+        np.testing.assert_allclose(res.MT_err, ngmix_res["MT_err"], atol=1e-10)
+        np.testing.assert_allclose(res.MF_err, ngmix_res["MF_err"], atol=1e-10)
 
     g1 = np.mean(g1arr)
     g2 = np.mean(g2arr)
