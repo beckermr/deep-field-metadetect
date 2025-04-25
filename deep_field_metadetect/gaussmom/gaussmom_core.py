@@ -51,6 +51,37 @@ class GaussMomData(NamedTuple):
     e_cov: jnp.ndarray = jnp.diag(jnp.array([jnp.nan, jnp.nan]))
     sums_err: jnp.ndarray = jnp.array([jnp.nan] * 6)
 
+    Mv: float = jnp.nan
+    Mu: float = jnp.nan
+    M1: float = jnp.nan
+    M2: float = jnp.nan
+    MT: float = jnp.nan
+    MF: float = jnp.nan
+
+    # these are same as above but with the alternative notation
+    M00: float = jnp.nan
+    M10: float = jnp.nan
+    M01: float = jnp.nan
+    M11: float = jnp.nan
+    M20: float = jnp.nan
+    M02: float = jnp.nan
+
+    # Now the errors
+    Mv_err: float = jnp.nan
+    Mu_err: float = jnp.nan
+    M1_err: float = jnp.nan
+    M2_err: float = jnp.nan
+    MT_err: float = jnp.nan
+    MF_err: float = jnp.nan
+
+    # these are same as above but with the alternative notation
+    M00_err: float = jnp.nan
+    M10_err: float = jnp.nan
+    M01_err: float = jnp.nan
+    M11_err: float = jnp.nan
+    M20_err: float = jnp.nan
+    M02_err: float = jnp.nan
+
     def tree_flatten(self):
         return (
             self.obs,
@@ -74,6 +105,30 @@ class GaussMomData(NamedTuple):
             self.e_err,
             self.e_cov,
             self.sums_err,
+            self.Mv,
+            self.Mu,
+            self.M1,
+            self.M2,
+            self.MT,
+            self.MF,
+            self.Mv_err,
+            self.Mu_err,
+            self.M1_err,
+            self.M2_err,
+            self.MT_err,
+            self.MF_err,
+            self.M00,
+            self.M10,
+            self.M01,
+            self.M11,
+            self.M20,
+            self.M02,
+            self.M00_err,
+            self.M10_err,
+            self.M01_err,
+            self.M11_err,
+            self.M20_err,
+            self.M02_err,
         ), None
 
     @classmethod
@@ -99,22 +154,3 @@ def obs_to_gaussmom_obs(obs: ngmix.Observation) -> GaussMomObs:
         - obs.jacobian.dudrow * obs.jacobian.dvdcol,
         obs.weight,
     )
-
-
-@jax.jit
-def _eval_gauss2d(pars, u, v, area):
-    cen_v, cen_u, irr, irc, icc = pars[0:5]
-
-    det = irr * icc - irc * irc
-    idet = 1.0 / det
-    drr = irr * idet
-    drc = irc * idet
-    dcc = icc * idet
-    norm = 1.0 / (2 * jnp.pi * jnp.sqrt(det))
-
-    # v->row, u->col in gauss
-    vdiff = v - cen_v
-    udiff = u - cen_u
-    chi2 = dcc * vdiff * vdiff + drr * udiff * udiff - 2.0 * drc * vdiff * udiff
-
-    return norm * jnp.exp(-0.5 * chi2) * area, norm

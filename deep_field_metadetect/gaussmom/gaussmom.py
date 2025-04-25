@@ -10,36 +10,15 @@ from ngmix.moments import MOMENTS_NAME_MAP
 from deep_field_metadetect.gaussmom.gaussmom_core import (
     GaussMomData,
     GaussMomObs,
+)
+from deep_field_metadetect.gaussmom.stats import get_ratio_var
+from deep_field_metadetect.gaussmom.utils import (
     _eval_gauss2d,
+    _fwhm_to_T,
 )
 
 
 @jax.jit
-def _fwhm_to_sigma(fwhm: float):
-    """
-    convert fwhm to sigma for a gaussian
-    """
-    return fwhm / 2.3548200450309493  # sig = fwhm / sqrt(8 * ln 2)
-
-
-@jax.jit
-def _fwhm_to_T(fwhm):
-    """
-    convert fwhm to T for a gaussian
-    """
-    sigma = _fwhm_to_sigma(fwhm)
-    return 2 * sigma**2
-
-
-@jax.jit
-def create_circular_mask(umod, vmod, maxrad):
-    distance_from_center = np.sqrt((umod) ** 2 + (vmod) ** 2)
-
-    mask = jnp.where(distance_from_center <= maxrad, 1, 0)
-
-    return mask.astype(int)
-
-
 def _set_fluxerr_s2n_flux_flags(res_flux, sums_cov, res_flux_flags, mf_ind):
     """Compute the flux error and signal-to-noise ratio (S/N),
     and update measurement flags
@@ -86,6 +65,7 @@ def _set_fluxerr_s2n_flux_flags(res_flux, sums_cov, res_flux_flags, mf_ind):
     )
 
 
+@jax.jit
 def _set_T_Terr_Tflags(sums, sums_cov, mt_ind, mf_ind, res_T_flags):
     """
     Compute the size parameter `T`, its associated error `Terr`,
@@ -152,6 +132,7 @@ def _set_T_Terr_Tflags(sums, sums_cov, mt_ind, mf_ind, res_T_flags):
     )
 
 
+@jax.jit
 def _diag_all_true(sums_cov, res_flags):
     """Validates that all diagonal elements of the covariance matrix are positive
 
@@ -187,6 +168,7 @@ def _diag_all_true(sums_cov, res_flags):
     )
 
 
+@jax.jit
 def _compute_shape_params(
     sums, sums_cov, m1_ind, m2_ind, mt_ind, res_T, res_flux, res_flags
 ):
@@ -324,8 +306,8 @@ def get_weighted_moments_stats(
 ):
     """Make a fitting results dict from a set of unnormalized moments.
 
-    Note this function does not check shapes
-    or call the _add_moments_by_name function of ngmix
+    Note this function does not check shapes of sums and sums_cov
+    as in ngmix
 
     Parameters
     ----------
@@ -435,47 +417,58 @@ def get_weighted_moments_stats(
         pars=pars,
     )
 
-    # _add_moments_by_name(res) # shouldn't modify sums or sums_cov
-
-    # TODO: not yet computing the normalized momemnts [Mv, Mu, M1, M2, MT, MF]
+    res = _add_moments_by_name(res)
 
     return res
 
 
-def _add_moments_by_name(res):  # TODO
-    sums = res["sums"]
-    sums_cov = res["sums_cov"]
-
+@jax.jit
+def _add_moments_by_name(res):
+    updates = {}
     mf_ind = MOMENTS_NAME_MAP["MF"]
-    fsum = sums[mf_ind]
-    fsum_err = np.sqrt(sums_cov[mf_ind, mf_ind])
 
-    # add in named sums normalized by flux sum (weight * image).sum()
-    # we don't store flags or errors for these
+    fsum = res.sums[mf_ind]
+    fsum_err = jnp.sqrt(res.sums_cov[mf_ind, mf_ind])
+
     mkeys = list(MOMENTS_NAME_MAP.keys())
     for name in mkeys:
         ind = MOMENTS_NAME_MAP[name]
-        if ind > sums.size - 1:
+        if ind > 5:
             continue
 
         err_name = f"{name}_err"
 
         if name in ["MF", "M00"]:
-            res[name] = fsum
-            res[err_name] = fsum_err
+            updates[name] = fsum
+            updates[err_name] = fsum_err
+
         else:
-            if fsum > 0:
-                res[name] = sums[ind] / fsum
-                res[err_name] = get_ratio_error(
-                    sums[ind],
-                    sums[mf_ind],
-                    sums_cov[ind, ind],
-                    sums_cov[mf_ind, mf_ind],
-                    sums_cov[ind, mf_ind],
+
+            def pos_fn(_):
+                val = res.sums[ind] / fsum
+                err = get_ratio_error(
+                    res.sums[ind],
+                    res.sums[mf_ind],
+                    res.sums_cov[ind, ind],
+                    res.sums_cov[mf_ind, mf_ind],
+                    res.sums_cov[ind, mf_ind],
                 )
-            else:
-                res[name] = np.nan
-                res[err_name] = np.nan
+                return val, err
+
+            def nan_fn(_):
+                return jnp.nan, jnp.nan
+
+            val, err = jax.lax.cond(
+                res.flux > 0,
+                pos_fn,
+                nan_fn,
+                operand=None,
+            )
+            updates[name] = val
+            updates[err_name] = err
+
+    res = res._replace(**updates)
+    return res
 
 
 @jax.jit
@@ -488,25 +481,6 @@ def get_ratio_error(a, b, var_a, var_b, cov_ab):
     var = jnp.clip(var, 0.0, jnp.inf)
     error = jnp.sqrt(var)
     return error
-
-
-@jax.jit
-def get_ratio_var(a, b, var_a, var_b, cov_ab):
-    """
-    Compute the variance of (a/b).
-    """
-
-    # Ensure no division by zero
-    b = jnp.where(
-        b == 0, 1e-100, b
-    )  # TODO: This does not raise a value error like ngmix
-
-    rsq = (a / b) ** 2
-
-    var = rsq * (var_a / a**2 + var_b / b**2 - 2 * cov_ab / (a * b))
-
-    var = jnp.where(var > 1e20, jnp.nan, var)
-    return var
 
 
 @dataclass
@@ -522,7 +496,7 @@ class GaussMom:
             mompars, gaussmom_obs.u, gaussmom_obs.v, gaussmom_obs.area
         )
 
-        self.weight = wt_noimage / (wt_norm * gaussmom_obs.area)
+        self.weight = wt_noimage / wt_norm
 
     def go(self, gaussmom_obs, maxrad=None, with_higher_order: bool = False):
         if maxrad is None:
@@ -548,7 +522,7 @@ class GaussMom:
         area = gaussmom_obs.area
         fac = 1 / area
 
-        res._replace(
+        res = res._replace(
             flux=res.flux * fac,
             flux_err=res.flux_err * fac,
             pars=res.pars.at[5].set(res.pars[5] * fac),
