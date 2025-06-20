@@ -2,7 +2,7 @@ import galsim
 import ngmix
 import numpy as np
 
-DEFAULT_SHEARS = ["noshear", "1p", "1m", "2p", "2m"]
+DEFAULT_SHEARS = ("noshear", "1p", "1m", "2p", "2m")
 DEFAULT_STEP = 0.01
 
 
@@ -38,10 +38,8 @@ def get_gauss_reconv_psf_galsim(psf, step=DEFAULT_STEP, flux=1):
     -------
     reconv_psf : galsim object
         The reconvolution PSF.
-    sigma : float
-        The width of the reconv PSF befor dilation.
     """
-    dk = psf.stepk / 4.0
+    dk = 2 * np.pi / (53 * 0.2) / 4.0
 
     small_kval = 1.0e-2  # Find the k where the given psf hits this kvalue
     smaller_kval = 3.0e-3  # Target PSF will have this kvalue at the same k
