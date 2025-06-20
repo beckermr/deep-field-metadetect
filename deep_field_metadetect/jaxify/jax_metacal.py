@@ -57,7 +57,9 @@ def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux
     small_kval = 1.0e-2  # Find the k where the given psf hits this kvalue
     smaller_kval = 3.0e-3  # Target PSF will have this kvalue at the same k
 
-    kim = psf.drawKImage(nx=nxy_psf * 4, ny=nxy_psf * 4, scale=dk)
+    kim = psf.drawKImage(
+        nx=173, ny=173, scale=dk
+    )  # leaving this as 4* nxy is leaving a 10% diff
     # kim = psf.drawKImage(scale=dk)
     karr_r = kim.real.array
     # Find the smallest r where the kval < small_kval
