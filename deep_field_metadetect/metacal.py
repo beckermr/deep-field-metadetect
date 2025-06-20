@@ -39,7 +39,7 @@ def get_gauss_reconv_psf_galsim(psf, step=DEFAULT_STEP, flux=1):
     reconv_psf : galsim object
         The reconvolution PSF.
     """
-    dk = psf.stepk / 4.0
+    dk = 2 * np.pi / (53 * 0.2) / 4.0
 
     small_kval = 1.0e-2  # Find the k where the given psf hits this kvalue
     smaller_kval = 3.0e-3  # Target PSF will have this kvalue at the same k
