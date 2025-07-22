@@ -24,9 +24,9 @@ def single_band_deep_field_metadetect(
     skip_obs_deep_corrections=False,
     nodet_flags=0,
     return_k_info=False,
-    force_stepk_field=0.0, 
-    force_maxk_field=0.0, 
-    force_stepk_psf=0.0, 
+    force_stepk_field=0.0,
+    force_maxk_field=0.0,
+    force_stepk_psf=0.0,
     force_maxk_psf=0.0,
     max_min_fft_size=0,
 ):
@@ -101,9 +101,9 @@ def single_band_deep_field_metadetect(
         skip_obs_wide_corrections=skip_obs_wide_corrections,
         skip_obs_deep_corrections=skip_obs_deep_corrections,
         return_k_info=return_k_info,
-        force_stepk_field=force_stepk_field, 
-        force_maxk_field=force_maxk_field, 
-        force_stepk_psf=force_stepk_psf, 
+        force_stepk_field=force_stepk_field,
+        force_maxk_field=force_maxk_field,
+        force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
         max_min_fft_size=max_min_fft_size,
     )
@@ -149,8 +149,8 @@ def single_band_deep_field_metadetect(
         ("bmask_flags", "i4"),
         ("mfrac", "f4"),
     ] + fres.dtype.descr
-    
-    if return_k_info: 
+
+    if return_k_info:
         return np.array(dfmdet_res, dtype=total_dtype), kinfo
-    
+
     return np.array(dfmdet_res, dtype=total_dtype), None

@@ -180,16 +180,16 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
         return_k_info=True,
-        force_stepk_field=0.12403490725241548, 
-        force_maxk_field=8.160777791551611, 
-        force_stepk_psf=0.6815071326229606, 
+        force_stepk_field=0.12403490725241548,
+        force_maxk_field=8.160777791551611,
+        force_stepk_psf=0.6815071326229606,
         force_maxk_psf=12.640001692177682,
     )
 
-    assert kinfo[0]==0.12403490725241548
-    assert kinfo[1]==8.160777791551611
-    assert kinfo[2]==0.6815071326229606
-    assert kinfo[3]==12.640001692177682
+    assert kinfo[0] == 0.12403490725241548
+    assert kinfo[1] == 8.160777791551611
+    assert kinfo[2] == 0.6815071326229606
+    assert kinfo[3] == 12.640001692177682
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] != "noshear")
     assert np.all(res["mfrac"][msk] >= 0.5)
