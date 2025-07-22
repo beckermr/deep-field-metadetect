@@ -38,7 +38,7 @@ def _run_single_sim(
         deep_noise_fac=deep_noise_fac,
         deep_psf_fac=deep_psf_fac,
     )
-    mcal_res = metacal_wide_and_deep_psf_matched(
+    mcal_res, _ = metacal_wide_and_deep_psf_matched(
         obs_w,
         obs_d,
         obs_dn,
@@ -239,7 +239,7 @@ def _run_single_sim_maybe_mcal(
             obs_w,
         )
     else:
-        mcal_res = metacal_wide_and_deep_psf_matched(
+        mcal_res, _ = metacal_wide_and_deep_psf_matched(
             obs_w,
             obs_d,
             obs_dn,

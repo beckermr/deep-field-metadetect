@@ -45,7 +45,7 @@ def _run_single_sim(
 
         pdb.set_trace()
 
-    res = single_band_deep_field_metadetect(
+    res, _ = single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
@@ -103,7 +103,7 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
     )
     obs_w.bmask = rng.choice([0, 1, 3], p=[0.5, 0.25, 0.25], size=obs_w.image.shape)
 
-    res = single_band_deep_field_metadetect(
+    res, _ = single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
@@ -140,13 +140,15 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
     )
     obs_w.mfrac = rng.uniform(0.5, 0.7, size=obs_w.image.shape)
 
-    res = single_band_deep_field_metadetect(
+    res, kinfo = single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
     )
+
+    assert kinfo is None
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] == "noshear")
     assert np.all(res["mfrac"][msk] >= 0.5)
@@ -171,13 +173,23 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
     )
     obs_d.mfrac = rng.uniform(0.5, 0.7, size=obs_w.image.shape)
 
-    res = single_band_deep_field_metadetect(
+    res, kinfo = single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
+        return_k_info=True,
+        force_stepk_field=0.12403490725241548, 
+        force_maxk_field=8.160777791551611, 
+        force_stepk_psf=0.6815071326229606, 
+        force_maxk_psf=12.640001692177682,
     )
+
+    assert kinfo[0]==0.12403490725241548
+    assert kinfo[1]==8.160777791551611
+    assert kinfo[2]==0.6815071326229606
+    assert kinfo[3]==12.640001692177682
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] != "noshear")
     assert np.all(res["mfrac"][msk] >= 0.5)
