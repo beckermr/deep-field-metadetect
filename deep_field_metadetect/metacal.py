@@ -484,7 +484,4 @@ def metacal_wide_and_deep_psf_matched(
     for k in mcal_res:
         mcal_res[k].psf.galsim_obj = reconv_psf
 
-    if return_k_info:
-        return mcal_res, kinfo
-
-    return mcal_res, None
+    return mcal_res, kinfo

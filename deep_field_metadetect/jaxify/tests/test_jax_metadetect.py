@@ -47,7 +47,7 @@ def _run_single_sim(
         return_dfmd_obs=True,
     )
 
-    res = jax_single_band_deep_field_metadetect(
+    res, _ = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
@@ -120,15 +120,19 @@ def _run_single_sim_jax_and_ngmix(
     obs_d = ngmix_obs_to_dfmd_obs(obs_d_ngmix)
     obs_dn = ngmix_obs_to_dfmd_obs(obs_dn_ngmix)
 
-    res_ngmix = single_band_deep_field_metadetect(
+    (
+        res_ngmix,
+        (force_stepk_field, force_maxk_field, force_stepk_psf, force_maxk_psf),
+    ) = single_band_deep_field_metadetect(
         obs_w_ngmix,
         obs_d_ngmix,
         obs_dn_ngmix,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
+        return_k_info=True,
     )
 
-    res = jax_single_band_deep_field_metadetect(
+    res, kinfo = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
@@ -137,7 +141,17 @@ def _run_single_sim_jax_and_ngmix(
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
         scale=scale,
+        return_k_info=True,
+        force_stepk_field=force_stepk_field,
+        force_maxk_field=force_maxk_field,
+        force_stepk_psf=force_stepk_psf,
+        force_maxk_psf=force_maxk_psf,
     )
+
+    assert kinfo[0] == force_stepk_field
+    assert kinfo[1] == force_maxk_field
+    assert kinfo[2] == force_stepk_psf
+    assert kinfo[3] == force_maxk_psf
 
     return measure_mcal_shear_quants(res), measure_mcal_shear_quants(res_ngmix)
 
@@ -233,12 +247,12 @@ def test_metadetect_single_band_deep_field_metadetect_jax_vs_ngmix(deep_psf_rati
     print_m_c(m_ng, merr_ng, c1_ng, c1err_ng, c2_ng, c2err_ng)
     assert_m_c_ok(m, merr, c1, c1err, c2, c2err)
 
-    assert np.allclose(m, m_ng, atol=5e-3)
-    assert np.allclose(merr, merr_ng, atol=5e-4)
-    assert np.allclose(c1err, c1err_ng, atol=1e-5)
-    assert np.allclose(c1, c1_ng, atol=1e-4)
-    assert np.allclose(c2err, c2err_ng, atol=1e-5)
-    assert np.allclose(c2, c2_ng, atol=1e-4)
+    assert np.allclose(m, m_ng, atol=1e-4)
+    assert np.allclose(merr, merr_ng, atol=1e-4)
+    assert np.allclose(c1err, c1err_ng, atol=1e-6)
+    assert np.allclose(c1, c1_ng, atol=1e-6)
+    assert np.allclose(c2err, c2err_ng, atol=1e-6)
+    assert np.allclose(c2, c2_ng, atol=1e-6)
 
 
 def test_metadetect_single_band_deep_field_metadetect_bmask():
@@ -265,7 +279,7 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
         bmask=rng.choice([0, 1, 3], p=[0.5, 0.25, 0.25], size=obs_w.image.shape)
     )
 
-    res = jax_single_band_deep_field_metadetect(
+    res, _ = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
@@ -311,7 +325,7 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
     )
     obs_w = obs_w._replace(mfrac=rng.uniform(0.5, 0.7, size=obs_w.image.shape))
 
-    res = jax_single_band_deep_field_metadetect(
+    res, _ = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
@@ -351,7 +365,7 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
     )
     obs_d = obs_d._replace(mfrac=rng.uniform(0.5, 0.7, size=obs_w.image.shape))
 
-    res = jax_single_band_deep_field_metadetect(
+    res, _ = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,

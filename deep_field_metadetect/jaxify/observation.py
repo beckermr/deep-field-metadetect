@@ -14,7 +14,7 @@ class DFMdetObservation(NamedTuple):
     bmask: Optional[jax.Array]
     ormask: Optional[jax.Array]
     noise: Optional[jax.Array]
-    aft: Optional[jax_galsim.wcs.AffineTransform]
+    wcs: Optional[jax_galsim.wcs.AffineTransform]
     psf: Optional["DFMdetObservation"]
     mfrac: Optional[jax.Array]
     meta: Optional[dict]
@@ -28,7 +28,7 @@ class DFMdetObservation(NamedTuple):
             self.bmask,
             self.ormask,
             self.noise,
-            self.aft,
+            self.wcs,
             self.psf,
             self.mfrac,
         )
@@ -81,7 +81,7 @@ def ngmix_obs_to_dfmd_obs(obs: ngmix.observation.Observation) -> DFMdetObservati
         bmask=obs.bmask if obs.has_bmask() else None,
         ormask=obs.ormask if obs.has_ormask() else None,
         noise=obs.noise if obs.has_noise() else None,
-        aft=jax_galsim.wcs.AffineTransform(
+        wcs=jax_galsim.wcs.AffineTransform(
             dudx=jacobian.dudcol,
             dudy=jacobian.dudrow,
             dvdx=jacobian.dvdcol,
@@ -110,12 +110,12 @@ def dfmd_obs_to_ngmix_obs(dfmd_obs) -> Observation:
         ormask=dfmd_obs.ormask,
         noise=dfmd_obs.noise if dfmd_obs.noise is None else np.array(dfmd_obs.noise),
         jacobian=ngmix.jacobian.Jacobian(
-            row=dfmd_obs.aft.origin.y - 1,
-            col=dfmd_obs.aft.origin.x - 1,
-            dudcol=dfmd_obs.aft.dudx,
-            dudrow=dfmd_obs.aft.dudy,
-            dvdcol=dfmd_obs.aft.dvdx,
-            dvdrow=dfmd_obs.aft.dvdy,
+            row=dfmd_obs.wcs.origin.y - 1,
+            col=dfmd_obs.wcs.origin.x - 1,
+            dudcol=dfmd_obs.wcs.dudx,
+            dudrow=dfmd_obs.wcs.dudy,
+            dvdcol=dfmd_obs.wcs.dvdx,
+            dvdrow=dfmd_obs.wcs.dvdy,
         ),
         psf=psf,
         mfrac=dfmd_obs.mfrac if dfmd_obs.mfrac is None else np.array(dfmd_obs.mfrac),
