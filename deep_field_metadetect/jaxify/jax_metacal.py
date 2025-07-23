@@ -30,7 +30,13 @@ def get_shear_tuple(shear, step):
 
 
 @partial(jax.jit, static_argnames=["dk", "nxy_psf"])
-def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux=1):
+def jax_get_gauss_reconv_psf_galsim(
+    psf, 
+    dk, 
+    nxy_psf=53, 
+    step=DEFAULT_STEP, 
+    flux=1
+):
     """Gets the target reconvolution PSF for an input PSF object.
 
     This is taken from galsim/tests/test_metacal.py and assumes the psf is
@@ -58,9 +64,11 @@ def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux
     smaller_kval = 3.0e-3  # Target PSF will have this kvalue at the same k
 
     kim = psf.drawKImage(
-        nx=173, ny=173, scale=dk
-    )  # leaving this as 4* nxy is leaving a 10% diff
-    # kim = psf.drawKImage(scale=dk)
+        nx=4*nxy_psf, ny=4*nxy_psf, scale=dk
+    )  
+    
+    # This will lead to a differnce in reconv psf size between GS and JGS
+
     karr_r = kim.real.array
     # Find the smallest r where the kval < small_kval
     nk = karr_r.shape[0]
