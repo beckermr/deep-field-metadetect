@@ -50,7 +50,7 @@ def _run_single_sim(
         deep_psf_fac=deep_psf_fac,
         return_dfmd_obs=True,
     )
-    mcal_res = jax_metacal_wide_and_deep_psf_matched(
+    mcal_res, _ = jax_metacal_wide_and_deep_psf_matched(
         obs_w,
         obs_d,
         obs_dn,
@@ -90,7 +90,7 @@ def _run_single_sim_jax_and_ngmix(
         deep_psf_fac=deep_psf_fac,
         return_dfmd_obs=False,
     )
-    mcal_res_ngmix = metacal_wide_and_deep_psf_matched(
+    mcal_res_ngmix, _ = metacal_wide_and_deep_psf_matched(
         obs_w_ngmix,
         obs_d_ngmix,
         obs_dn_ngmix,
@@ -103,7 +103,7 @@ def _run_single_sim_jax_and_ngmix(
     obs_d = ngmix_obs_to_dfmd_obs(obs_d_ngmix)
     obs_dn = ngmix_obs_to_dfmd_obs(obs_dn_ngmix)
 
-    mcal_res = jax_metacal_wide_and_deep_psf_matched(
+    mcal_res, _ = jax_metacal_wide_and_deep_psf_matched(
         obs_w,
         obs_d,
         obs_dn,

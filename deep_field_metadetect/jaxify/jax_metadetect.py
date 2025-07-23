@@ -26,6 +26,12 @@ def jax_single_band_deep_field_metadetect(
     skip_obs_deep_corrections=False,
     nodet_flags=0,
     scale=0.2,
+    return_k_info=False,
+    force_stepk_field=0.0,
+    force_maxk_field=0.0,
+    force_stepk_psf=0.0,
+    force_maxk_psf=0.0,
+    max_min_fft_size=1024,
 ) -> dict:
     """Run deep-field metadetection for a simple scenario of a single band
     with a single image per band using only post-PSF Gaussian weighted moments.
@@ -68,7 +74,7 @@ def jax_single_band_deep_field_metadetect(
     if shears is None:
         shears = DEFAULT_SHEARS
 
-    mcal_res = jax_metacal_wide_and_deep_psf_matched(
+    mcal_res, kinfo = jax_metacal_wide_and_deep_psf_matched(
         obs_wide=obs_wide,
         obs_deep=obs_deep,
         obs_deep_noise=obs_deep_noise,
@@ -79,6 +85,12 @@ def jax_single_band_deep_field_metadetect(
         skip_obs_wide_corrections=skip_obs_wide_corrections,
         skip_obs_deep_corrections=skip_obs_deep_corrections,
         scale=scale,
+        return_k_info=return_k_info,
+        force_stepk_field=force_stepk_field,
+        force_maxk_field=force_maxk_field,
+        force_stepk_psf=force_stepk_psf,
+        force_maxk_psf=force_maxk_psf,
+        max_min_fft_size=max_min_fft_size,
     )  # This returns ngmix Obs for now
 
     psf_res = fit_gauss_mom_obs(mcal_res["noshear"].psf)
@@ -123,4 +135,4 @@ def jax_single_band_deep_field_metadetect(
         ("mfrac", "f4"),
     ] + fres.dtype.descr
 
-    return np.array(dfmdet_res, dtype=total_dtype)
+    return np.array(dfmdet_res, dtype=total_dtype), kinfo
