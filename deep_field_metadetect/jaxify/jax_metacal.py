@@ -30,13 +30,7 @@ def get_shear_tuple(shear, step):
 
 
 @partial(jax.jit, static_argnames=["dk", "nxy_psf"])
-def jax_get_gauss_reconv_psf_galsim(
-    psf, 
-    dk, 
-    nxy_psf=53, 
-    step=DEFAULT_STEP, 
-    flux=1
-):
+def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux=1):
     """Gets the target reconvolution PSF for an input PSF object.
 
     This is taken from galsim/tests/test_metacal.py and assumes the psf is
@@ -63,10 +57,8 @@ def jax_get_gauss_reconv_psf_galsim(
     small_kval = 1.0e-2  # Find the k where the given psf hits this kvalue
     smaller_kval = 3.0e-3  # Target PSF will have this kvalue at the same k
 
-    kim = psf.drawKImage(
-        nx=4*nxy_psf, ny=4*nxy_psf, scale=dk
-    )  
-    
+    kim = psf.drawKImage(nx=4 * nxy_psf, ny=4 * nxy_psf, scale=dk)
+
     # This will lead to a differnce in reconv psf size between GS and JGS
 
     karr_r = kim.real.array
@@ -117,7 +109,9 @@ def jax_get_max_gauss_reconv_psf(obs_w, obs_d, nxy_psf, scale=0.2, step=DEFAULT_
 
 
 @partial(jax.jit, static_argnames=["nxy_psf", "max_min_fft_size"])
-def _jax_render_psf_and_build_obs(image, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1, max_min_fft_size=1024):
+def _jax_render_psf_and_build_obs(
+    image, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1, max_min_fft_size=1024
+):
     reconv_psf = reconv_psf.withGSParams(
         minimum_fft_size=max_min_fft_size,
         maximum_fft_size=max_min_fft_size,
@@ -140,7 +134,9 @@ def _jax_render_psf_and_build_obs(image, dfmd_obs, reconv_psf, nxy_psf, weight_f
 
 
 @partial(jax.jit, static_argnames=["dims", "max_min_fft_size"])
-def _jax_metacal_op_g1g2_impl(*, wcs, image, noise, psf_inv, dims, reconv_psf, g1, g2, max_min_fft_size=1024):
+def _jax_metacal_op_g1g2_impl(
+    *, wcs, image, noise, psf_inv, dims, reconv_psf, g1, g2, max_min_fft_size=1024
+):
     """Run metacal on an dfmd observation.
 
     Note that the noise image should already be rotated by 90 degrees here.
@@ -196,7 +192,12 @@ def jax_metacal_op_g1g2(dfmd_obs, reconv_psf, g1, g2, nxy_psf, max_min_fft_size=
     )
 
     return _jax_render_psf_and_build_obs(
-        mcal_image, dfmd_obs, reconv_psf, nxy_psf=nxy_psf, weight_fac=0.5, max_min_fft_size=max_min_fft_size
+        mcal_image,
+        dfmd_obs,
+        reconv_psf,
+        nxy_psf=nxy_psf,
+        weight_fac=0.5,
+        max_min_fft_size=max_min_fft_size,
     )
 
 
@@ -258,40 +259,42 @@ def jax_metacal_op_shears(
     return mcal_res
 
 
-@partial(jax.jit, static_argnames=[
-        "nxy", 
-        "nxy_psf", 
+@partial(
+    jax.jit,
+    static_argnames=[
+        "nxy",
+        "nxy_psf",
         "return_k_info",
         "force_stepk_field",
         "force_maxk_field",
         "force_stepk_psf",
         "force_maxk_psf",
         "max_min_fft_size",
-        ]
-    )
+    ],
+)
 def jax_match_psf(
-        dfmd_obs, 
-        reconv_psf, 
-        nxy, 
-        nxy_psf, 
-        return_k_info=False,
-        force_stepk_field=0.0, 
-        force_maxk_field=0.0, 
-        force_stepk_psf=0.0, 
-        force_maxk_psf=0.0,
-        max_min_fft_size=1024,
-    ):
+    dfmd_obs,
+    reconv_psf,
+    nxy,
+    nxy_psf,
+    return_k_info=False,
+    force_stepk_field=0.0,
+    force_maxk_field=0.0,
+    force_stepk_psf=0.0,
+    force_maxk_psf=0.0,
+    max_min_fft_size=1024,
+):
     """Match the PSF on an dfmd observation to a new PSF."""
     wcs = dfmd_obs.wcs._local_wcs
     image = get_jax_galsim_object_from_dfmd_obs(
-        dfmd_obs, 
-        kind="image", 
-        force_stepk=force_stepk_field, 
+        dfmd_obs,
+        kind="image",
+        force_stepk=force_stepk_field,
         force_maxk=force_maxk_field,
     )
     psf = get_jax_galsim_object_from_dfmd_obs(
-        dfmd_obs.psf, 
-        kind="image", 
+        dfmd_obs.psf,
+        kind="image",
         force_stepk=force_stepk_psf,
         force_maxk=force_maxk_psf,
     )
@@ -299,7 +302,7 @@ def jax_match_psf(
     ims = jax_galsim.Convolve(
         [image, jax_galsim.Deconvolve(psf), reconv_psf],
         gsparams=jax_galsim.GSParams(
-            minimum_fft_size=max_min_fft_size, 
+            minimum_fft_size=max_min_fft_size,
             maximum_fft_size=max_min_fft_size,
         ),
     )
@@ -311,14 +314,18 @@ def jax_match_psf(
     ims = ims.drawImage(nx=nxy, ny=nxy, wcs=wcs).array
 
     def return_obs_and_kinfo(_):
-        return _jax_render_psf_and_build_obs(ims, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1), ( image.stepk, image.maxk, psf.stepk, psf.maxk)
+        return _jax_render_psf_and_build_obs(
+            ims, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1
+        ), (image.stepk, image.maxk, psf.stepk, psf.maxk)
 
     def return_obs_only(_):
         return _jax_render_psf_and_build_obs(
             ims, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1
-        ), (0., 0., 0., 0.)
+        ), (0.0, 0.0, 0.0, 0.0)
 
-    return jax.lax.cond(return_k_info, return_obs_and_kinfo, return_obs_only, operand=None)
+    return jax.lax.cond(
+        return_k_info, return_obs_and_kinfo, return_obs_only, operand=None
+    )
 
 
 def _extract_attr(obs, attr, dtype=jnp.float64):
@@ -422,12 +429,12 @@ def jax_add_dfmd_obs(
 
 
 def get_jax_galsim_object_from_dfmd_obs(
-        dfmd_obs, 
-        kind="image", 
-        rot90=0, 
-        force_stepk=0.0, 
-        force_maxk=0.0,
-    ):
+    dfmd_obs,
+    kind="image",
+    rot90=0,
+    force_stepk=0.0,
+    force_maxk=0.0,
+):
     """Make an interpolated image from an dfmd obs."""
     return jax_galsim.InterpolatedImage(
         jax_galsim.ImageD(
@@ -495,10 +502,10 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
     # make the wide obs
 
     mcal_obs_wide, kinfo = jax_match_psf(
-        obs_wide, 
-        reconv_psf, 
-        nxy, 
-        nxy_psf, 
+        obs_wide,
+        reconv_psf,
+        nxy,
+        nxy_psf,
         return_k_info=return_k_info,
         force_stepk_field=force_stepk_field,
         force_maxk_field=force_maxk_field,
@@ -516,9 +523,9 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
     # get PSF matched noise
     obs_wide_noise = obs_wide._replace(image=obs_wide.noise)
     wide_noise_corr, _ = jax_match_psf(
-        obs_wide_noise, 
-        reconv_psf, 
-        nxy, 
+        obs_wide_noise,
+        reconv_psf,
+        nxy,
         nxy_psf,
         force_stepk_field=force_stepk_field,
         force_maxk_field=force_maxk_field,
