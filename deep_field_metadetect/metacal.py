@@ -193,7 +193,7 @@ def match_psf(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    max_min_fft_size=0,
+    max_min_fft_size=None,
 ):
     """Match the PSF on an ngmix observation to a new PSF."""
     wcs = obs.jacobian.get_galsim_wcs()
@@ -211,7 +211,7 @@ def match_psf(
         _force_maxk=force_maxk_psf,
     )
 
-    if max_min_fft_size == 0:
+    if max_min_fft_size == None:
         ims = galsim.Convolve(
             [image, galsim.Deconvolve(psf), reconv_psf],
         )
@@ -362,7 +362,7 @@ def metacal_wide_and_deep_psf_matched(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    max_min_fft_size=0,
+    max_min_fft_size=None,
 ):
     """Do metacalibration for a combination of wide+deep datasets.
 
@@ -409,7 +409,7 @@ def metacal_wide_and_deep_psf_matched(
         Used mainly for testing.
     max_min_fft_size: int, optional
         To fix max and min values of FFT size.
-        Defaults to 0 which lets Galsim determine the values.
+        Defaults to None which lets Galsim determine the values.
         Used mainly to test against JaxGalsim.
 
     Returns
