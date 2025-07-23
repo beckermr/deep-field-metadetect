@@ -211,7 +211,7 @@ def match_psf(
         _force_maxk=force_maxk_psf,
     )
 
-    if max_min_fft_size == None:
+    if max_min_fft_size is None:
         ims = galsim.Convolve(
             [image, galsim.Deconvolve(psf), reconv_psf],
         )
