@@ -87,10 +87,11 @@ def get_max_gauss_reconv_psf(obs_w, obs_d, step=DEFAULT_STEP):
 def _render_psf_and_build_obs(
     image, obs, reconv_psf, weight_fac=1, max_min_fft_size=None
 ):
-    reconv_psf = reconv_psf.withGSParams(
-        minimum_fft_size=max_min_fft_size,
-        maximum_fft_size=max_min_fft_size,
-    )
+    if max_min_fft_size is not None:
+        reconv_psf = reconv_psf.withGSParams(
+            minimum_fft_size=max_min_fft_size,
+            maximum_fft_size=max_min_fft_size,
+        )
 
     pim = reconv_psf.drawImage(
         nx=obs.psf.image.shape[1],
