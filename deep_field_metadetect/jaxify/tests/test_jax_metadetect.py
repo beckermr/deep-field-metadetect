@@ -130,6 +130,7 @@ def _run_single_sim_jax_and_ngmix(
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
         return_k_info=True,
+        max_min_fft_size=1024,
     )
 
     res, kinfo = jax_single_band_deep_field_metadetect(
@@ -146,6 +147,7 @@ def _run_single_sim_jax_and_ngmix(
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
+        max_min_fft_size=1024,
     )
 
     assert kinfo[0] == force_stepk_field

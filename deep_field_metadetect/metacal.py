@@ -84,7 +84,12 @@ def get_max_gauss_reconv_psf(obs_w, obs_d, step=DEFAULT_STEP):
     return get_max_gauss_reconv_psf_galsim(psf_w, psf_d, step=step)
 
 
-def _render_psf_and_build_obs(image, obs, reconv_psf, weight_fac=1):
+def _render_psf_and_build_obs(image, obs, reconv_psf, weight_fac=1, max_min_fft_size=None):
+    reconv_psf = reconv_psf.withGSParams(
+        minimum_fft_size=max_min_fft_size,
+        maximum_fft_size=max_min_fft_size,
+    )
+
     pim = reconv_psf.drawImage(
         nx=obs.psf.image.shape[1],
         ny=obs.psf.image.shape[0],
@@ -131,7 +136,7 @@ def _metacal_op_g1g2_impl(*, wcs, image, noise, psf_inv, dims, reconv_psf, g1, g
     return ims + ns
 
 
-def metacal_op_g1g2(obs, reconv_psf, g1, g2):
+def metacal_op_g1g2(obs, reconv_psf, g1, g2, max_min_fft_size=None):
     """Run metacal on an ngmix observation."""
     mcal_image = _metacal_op_g1g2_impl(
         wcs=obs.jacobian.get_galsim_wcs(),
@@ -147,10 +152,10 @@ def metacal_op_g1g2(obs, reconv_psf, g1, g2):
         g1=g1,
         g2=g2,
     )
-    return _render_psf_and_build_obs(mcal_image, obs, reconv_psf, weight_fac=0.5)
+    return _render_psf_and_build_obs(mcal_image, obs, reconv_psf, weight_fac=0.5, max_min_fft_size=max_min_fft_size)
 
 
-def metacal_op_shears(obs, reconv_psf=None, shears=None, step=DEFAULT_STEP):
+def metacal_op_shears(obs, reconv_psf=None, shears=None, step=DEFAULT_STEP, max_min_fft_size=None):
     """Run metacal on an ngmix observation."""
     if shears is None:
         shears = DEFAULT_SHEARS
@@ -180,7 +185,7 @@ def metacal_op_shears(obs, reconv_psf=None, shears=None, step=DEFAULT_STEP):
             g2=g2,
         )
         mcal_res[shear] = _render_psf_and_build_obs(
-            mcal_image, obs, reconv_psf, weight_fac=0.5
+            mcal_image, obs, reconv_psf, weight_fac=0.5, max_min_fft_size=max_min_fft_size
         )
     return mcal_res
 
@@ -230,14 +235,14 @@ def match_psf(
 
     ims = ims.drawImage(nx=obs.image.shape[1], ny=obs.image.shape[0], wcs=wcs).array
     if return_k_info:
-        return _render_psf_and_build_obs(ims, obs, reconv_psf, weight_fac=1), (
+        return _render_psf_and_build_obs(ims, obs, reconv_psf, weight_fac=1, max_min_fft_size=max_min_fft_size), (
             image._stepk,
             image._maxk,
             psf._stepk,
             psf._maxk,
         )
 
-    return _render_psf_and_build_obs(ims, obs, reconv_psf, weight_fac=1), None
+    return _render_psf_and_build_obs(ims, obs, reconv_psf, weight_fac=1, max_min_fft_size=max_min_fft_size), None
 
 
 def _extract_attr(obs, attr, dtype):
@@ -440,7 +445,7 @@ def metacal_wide_and_deep_psf_matched(
     if not skip_obs_wide_corrections:
         mcal_obs_wide = add_ngmix_obs(
             mcal_obs_wide,
-            metacal_op_g1g2(obs_deep_noise, reconv_psf, 0, 0),
+            metacal_op_g1g2(obs_deep_noise, reconv_psf, 0, 0, max_min_fft_size=max_min_fft_size),
             skip_mfrac_for_second=True,
         )
 
@@ -464,6 +469,7 @@ def metacal_wide_and_deep_psf_matched(
         reconv_psf=reconv_psf,
         shears=shears,
         step=step,
+        max_min_fft_size=max_min_fft_size,
     )
 
     # now add in noise corr to make it match the wide noise
