@@ -396,7 +396,7 @@ def _run_single_sim_maybe_mcal(
         for key, value in mcal_res.items():
             mcal_res[key] = dfmd_obs_to_ngmix_obs(value)
     else:
-        mcal_res = jax_metacal_wide_and_deep_psf_matched(
+        mcal_res, _ = jax_metacal_wide_and_deep_psf_matched(
             obs_w,
             obs_d,
             obs_dn,
