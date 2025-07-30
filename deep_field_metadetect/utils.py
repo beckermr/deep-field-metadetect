@@ -2,8 +2,6 @@ import sys
 import time
 from contextlib import contextmanager
 
-# import jax.numpy as jnp
-# import jax_galsim
 import galsim
 import ngmix
 import numpy as np
