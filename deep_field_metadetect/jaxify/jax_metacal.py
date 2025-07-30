@@ -30,7 +30,9 @@ def get_shear_tuple(shear, step):
 
 
 @partial(jax.jit, static_argnames=["dk", "nxy_psf", "kim_size"])
-def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux=1, kim_size=None):
+def jax_get_gauss_reconv_psf_galsim(
+    psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux=1, kim_size=None
+):
     """Gets the target reconvolution PSF for an input PSF object.
 
     This is taken from galsim/tests/test_metacal.py and assumes the psf is
@@ -273,7 +275,7 @@ def jax_metacal_op_shears(
     mcal_res = {}
     for i, shear in enumerate(shears):
         mcal_res[shear] = jax.tree.map(lambda x: x[i], mcal_obs_list)
-    
+
     return mcal_res
 
 
