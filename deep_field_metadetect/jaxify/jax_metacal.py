@@ -239,10 +239,12 @@ def jax_metacal_op_shears(
     psf = get_jax_galsim_object_from_dfmd_obs(dfmd_obs.psf, kind="image")
     psf_inv = jax_galsim.Deconvolve(psf)
 
-    mcal_res = {}
-    for shear in shears:
-        g1, g2 = get_shear_tuple(shear, step)
+    shear_tuples = jnp.array([get_shear_tuple(shear, step) for shear in shears])
+    g1_vals = shear_tuples[:, 0]
+    g2_vals = shear_tuples[:, 1]
 
+    # Vectorized metacal operation across all shears
+    def single_shear_op(g1, g2):
         mcal_image = _jax_metacal_op_g1g2_impl(
             wcs=wcs,
             image=image,
@@ -254,8 +256,7 @@ def jax_metacal_op_shears(
             g2=g2,
             max_min_fft_size=max_min_fft_size,
         )
-
-        mcal_res[shear] = _jax_render_psf_and_build_obs(
+        return _jax_render_psf_and_build_obs(
             mcal_image,
             dfmd_obs,
             reconv_psf,
@@ -263,6 +264,16 @@ def jax_metacal_op_shears(
             weight_fac=0.5,
             max_min_fft_size=max_min_fft_size,
         )
+
+    # Use vmap to parallelize across shears
+    vectorized_shear_op = jax.vmap(single_shear_op)
+    mcal_obs_list = vectorized_shear_op(g1_vals, g2_vals)
+
+    # Convert back to dictionary format
+    mcal_res = {}
+    for i, shear in enumerate(shears):
+        mcal_res[shear] = jax.tree.map(lambda x: x[i], mcal_obs_list)
+    
     return mcal_res
 
 
@@ -553,6 +564,7 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
     )
 
     # now add in noise corr to make it match the wide noise
+    # TODO: is it after to vextorize?
     if not skip_obs_deep_corrections:
         for k in mcal_res:
             mcal_res[k] = jax_add_dfmd_obs(
