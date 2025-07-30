@@ -119,9 +119,7 @@ class TestJaxNgmixIntermediates:
         # Test PSF properties
         assert np.allclose(
             max_reconv_psf_ngmix.fwhm, max_reconv_psf_jax.fwhm, rtol=0.02, atol=1e-6
-        ), (
-            f"Max FWHM mismatch: {max_reconv_psf_ngmix.fwhm} vs {max_reconv_psf_jax.fwhm}"
-        )
+        ), f"Max FWHM err: {max_reconv_psf_ngmix.fwhm} vs {max_reconv_psf_jax.fwhm}"
 
     def test_metacal_single_shear_consistency(self, simple_obs_pair):
         """Test single shear operations."""
