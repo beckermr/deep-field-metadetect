@@ -29,8 +29,8 @@ def get_shear_tuple(shear, step):
         raise RuntimeError("Shear value '%s' not regonized!" % shear)
 
 
-@partial(jax.jit, static_argnames=["dk", "nxy_psf"])
-def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux=1):
+@partial(jax.jit, static_argnames=["dk", "nxy_psf", "kim_size"])
+def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux=1, kim_size=None):
     """Gets the target reconvolution PSF for an input PSF object.
 
     This is taken from galsim/tests/test_metacal.py and assumes the psf is
@@ -44,10 +44,14 @@ def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux
         The Fourier-space pixel scale.
     nxy_psf : int, optional
         The size of the PSF image in pixels (default is 53).
+        Used to set k_image size, but is overridden if kim_size is passed.
     step : float, optional
         The step size for coordinate grids (default is `DEFAULT_STEP`).
     flux : float, optional
         The total flux of the output PSF (default is 1).
+    kim_size : int
+        k image size.
+        Defaults to None, which sets size as 4*nxy_psf
 
     Returns
     -------
@@ -57,7 +61,10 @@ def jax_get_gauss_reconv_psf_galsim(psf, dk, nxy_psf=53, step=DEFAULT_STEP, flux
     small_kval = 1.0e-2  # Find the k where the given psf hits this kvalue
     smaller_kval = 3.0e-3  # Target PSF will have this kvalue at the same k
 
-    kim = psf.drawKImage(nx=4 * nxy_psf, ny=4 * nxy_psf, scale=dk)
+    if kim_size is None:
+        kim = psf.drawKImage(nx=4 * nxy_psf, ny=4 * nxy_psf, scale=dk)
+    else:
+        kim = psf.drawKImage(nx=kim_size, ny=kim_size, scale=dk)
 
     # This will lead to a differnce in reconv psf size between GS and JGS
 
