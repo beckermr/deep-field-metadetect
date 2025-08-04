@@ -270,6 +270,7 @@ def test_deep_metacal(deep_psf_ratio):
     assert_m_c_ok(m, merr, c1, c1err, c2, c2err)
 
 
+@pytest.mark.slow
 def test_deep_metacal_widelows2n():
     nsims = 500
     noise_fac = 1 / np.sqrt(1000)
@@ -407,6 +408,7 @@ def _run_single_sim_maybe_mcal(
     return fit_gauss_mom_mcal_res(mcal_res), mcal_res
 
 
+@pytest.mark.slow
 def test_deep_metacal_noise_object_s2n():
     nsims = 100
     noise_fac = 1 / np.sqrt(10)
