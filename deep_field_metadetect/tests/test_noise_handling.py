@@ -20,7 +20,7 @@ def _simple_noise_sim(seed):
         obj_flux_factor=0,
     )
 
-    mcal_res = metacal_wide_and_deep_psf_matched(
+    mcal_res, _ = metacal_wide_and_deep_psf_matched(
         obs_wide,
         obs_deep,
         obs_deep_noise,
