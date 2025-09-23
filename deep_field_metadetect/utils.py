@@ -7,6 +7,11 @@ import ngmix
 import numpy as np
 from ngmix.gaussmom import GaussMom
 
+from deep_field_metadetect.jaxify.observation import (
+    DFMdetObservation,
+    dfmd_obs_to_ngmix_obs,
+    ngmix_obs_to_dfmd_obs,
+)
 from deep_field_metadetect.metacal import DEFAULT_SHEARS
 
 GLOBAL_START_TIME = time.time()
@@ -297,7 +302,12 @@ def fit_gauss_mom_mcal_res(mcal_res, fwhm=1.2):
     vals = np.zeros(len(mcal_res), dtype=dt)
 
     fitter = GaussMom(fwhm)
-    psf_res = fitter.go(mcal_res["noshear"].psf)
+
+    psf = mcal_res["noshear"].psf
+    if isinstance(psf, DFMdetObservation):
+        psf = dfmd_obs_to_ngmix_obs(mcal_res["noshear"].psf)
+
+    psf_res = fitter.go(psf)
 
     for i, (shear, obs) in enumerate(mcal_res.items()):
         vals["mdet_step"][i] = shear
@@ -309,7 +319,10 @@ def fit_gauss_mom_mcal_res(mcal_res, fwhm=1.2):
 
         vals["wmom_psf_T"][i] = psf_res["T"]
 
+        if isinstance(obs, DFMdetObservation):
+            obs = dfmd_obs_to_ngmix_obs(obs)
         res = fitter.go(obs)
+
         vals["wmom_flags"][i] = res["flags"]
 
         if res["flags"] != 0:
@@ -541,14 +554,14 @@ def _gen_hex_grid(*, rng, dim, buff, pixel_scale, n_tot):
     return shifts
 
 
-def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim):
+def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim, dim_psf=53):
     cen = (dim - 1) / 2
 
     im = obj.drawImage(nx=dim, ny=dim, scale=scale).array
     im += rng.normal(size=im.shape, scale=nse)
 
-    cen_psf = (53 - 1) / 2
-    psf_im = psf.drawImage(nx=53, ny=53, scale=scale).array
+    cen_psf = (dim_psf - 1) / 2
+    psf_im = psf.drawImage(nx=dim_psf, ny=dim_psf, scale=scale).array
 
     if dither is not None:
         jac = ngmix.DiagonalJacobian(
@@ -558,7 +571,7 @@ def _make_single_sim(*, dither=None, rng, psf, obj, nse, scale, dim):
         jac = ngmix.DiagonalJacobian(scale=scale, row=cen, col=cen)
     psf_jac = ngmix.DiagonalJacobian(scale=scale, row=cen_psf, col=cen_psf)
 
-    obs = ngmix.Observation(
+    obs = ngmix.observation.Observation(
         image=im,
         weight=np.ones_like(im) / nse**2,
         jacobian=jac,
@@ -584,8 +597,10 @@ def make_simple_sim(
     n_objs=1,
     scale=0.2,
     dim=53,
+    dim_psf=53,
     buff=26,
     obj_flux_factor=1,
+    return_dfmd_obs=False,
 ):
     """Make a simple simulation for testing deep-field metadetection.
 
@@ -670,6 +685,7 @@ def make_simple_sim(
         dither=shifts[0] / scale if n_objs == 1 else None,
         scale=scale,
         dim=dim,
+        dim_psf=dim_psf,
     )
 
     obs_deep = _make_single_sim(
@@ -680,6 +696,7 @@ def make_simple_sim(
         dither=shifts[0] / scale if n_objs == 1 else None,
         scale=scale,
         dim=dim,
+        dim_psf=dim_psf,
     )
 
     obs_deep_noise = _make_single_sim(
@@ -690,6 +707,13 @@ def make_simple_sim(
         dither=shifts[0] / scale if n_objs == 1 else None,
         scale=scale,
         dim=dim,
+        dim_psf=dim_psf,
     )
+    if return_dfmd_obs:
+        return (
+            ngmix_obs_to_dfmd_obs(obs_wide),
+            ngmix_obs_to_dfmd_obs(obs_deep),
+            ngmix_obs_to_dfmd_obs(obs_deep_noise),
+        )
 
     return obs_wide, obs_deep, obs_deep_noise
