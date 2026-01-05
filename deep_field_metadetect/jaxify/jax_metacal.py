@@ -411,13 +411,7 @@ def jax_match_psf(
         force_maxk=force_maxk_psf,
     )
 
-    ims = jax_galsim.Convolve(
-        [image, jax_galsim.Deconvolve(psf), reconv_psf],
-        gsparams=jax_galsim.GSParams(
-            minimum_fft_size=fft_size,
-            maximum_fft_size=fft_size,
-        ),
-    )
+    ims = jax_galsim.Convolve([image, jax_galsim.Deconvolve(psf), reconv_psf])
 
     ims = ims.withGSParams(
         minimum_fft_size=fft_size,
