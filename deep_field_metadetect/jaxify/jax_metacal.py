@@ -92,7 +92,9 @@ def jax_get_gauss_reconv_psf_galsim(
     This will lead to a difference in reconv PSF size between GS and JGS
     if similar settings are not used."""
     if kim_size is None:
-        kim = psf.drawKImage(nx=4 * nxy_psf, ny=4 * nxy_psf, scale=dk)
+        target_size = 4 * nxy_psf
+        kim_size = 2 ** int(np.log2(target_size))
+        kim = psf.drawKImage(nx=kim_size, ny=kim_size, scale=dk)
     else:
         kim = psf.drawKImage(nx=kim_size, ny=kim_size, scale=dk)
 
