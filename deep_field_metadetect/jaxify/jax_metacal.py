@@ -428,7 +428,7 @@ def jax_match_psf(
     else:
         return _jax_render_psf_and_build_obs(
             ims, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1
-        ), (np.nan, np.nan, np.nan, np.nan)
+        )
 
 
 def _extract_attr(obs, attr, dtype=np.float32):
@@ -705,7 +705,7 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
     """
     # make the wide obs
 
-    mcal_obs_wide, kinfo = jax_match_psf(
+    mcal_obs_wide = jax_match_psf(
         obs_wide,
         reconv_psf,
         nxy,
@@ -717,6 +717,8 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
         force_maxk_psf=force_maxk_psf,
         fft_size=fft_size,
     )
+    if return_k_info:
+        mcal_obs_wide, kinfo = mcal_obs_wide
     if not skip_obs_wide_corrections:
         mcal_obs_wide = jax_add_dfmd_obs(
             mcal_obs_wide,
@@ -726,7 +728,7 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
 
     # get PSF matched noise
     obs_wide_noise = obs_wide.replace(image=obs_wide.noise)
-    wide_noise_corr, _ = jax_match_psf(
+    wide_noise_corr = jax_match_psf(
         obs_wide_noise,
         reconv_psf,
         nxy,
