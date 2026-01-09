@@ -27,7 +27,8 @@ repos:
       - id: isort
         name: isort (python)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.7
+    # Ruff version.
+    rev: v0.14.10
     hooks:
       - id: ruff
         args: [ --fix ]
