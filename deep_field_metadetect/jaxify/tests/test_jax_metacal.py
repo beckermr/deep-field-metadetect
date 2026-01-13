@@ -5,9 +5,11 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from deep_field_metadetect.jaxify.jax_dfmd_defaults import DEFAULT_FFT_SIZE
 from deep_field_metadetect.jaxify.jax_metacal import (
     jax_add_dfmd_obs,
     jax_metacal_op_shears,
+    jax_metacal_wide_and_deep_psf_matched,
 )
 from deep_field_metadetect.jaxify.jax_utils import compute_dk, compute_kim_size
 from deep_field_metadetect.jaxify.observation import (
@@ -16,7 +18,11 @@ from deep_field_metadetect.jaxify.observation import (
     dfmd_obs_to_ngmix_obs,
     ngmix_obs_to_dfmd_obs,
 )
-from deep_field_metadetect.metacal import add_ngmix_obs, metacal_op_shears
+from deep_field_metadetect.metacal import (
+    add_ngmix_obs,
+    metacal_op_shears,
+    metacal_wide_and_deep_psf_matched,
+)
 from deep_field_metadetect.utils import (
     assert_m_c_ok,
     estimate_m_and_c,
@@ -616,4 +622,249 @@ def test_jax_add_dfmd_obs_vs_add_dfmd_obs_skip_mfrac():
     expected_mfrac = (obs1.mfrac + obs2.mfrac) / 2
     assert jnp.allclose(jax_result.mfrac, expected_mfrac, atol=1e-10), (
         "mfrac should be average when skip_mfrac_for_second=False"
+    )
+
+
+def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix():
+    """
+    Test if jax_metacal_wide_and_deep_psf_matched and metacal_wide_and_deep_psf_matched
+    return the same results.
+    """
+    nxy = 201
+    nxy_psf = 53
+    scale = 0.2
+    seed = 1234
+
+    # Create test observations
+    obs_w_ngmix, obs_d_ngmix, obs_dn_ngmix = make_simple_sim(
+        seed=seed,
+        g1=0.02,
+        g2=0.0,
+        s2n=1e4,
+        deep_noise_fac=1.0 / np.sqrt(30),
+        deep_psf_fac=0.8,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
+        buff=25,
+        n_objs=2,
+        return_dfmd_obs=False,  # Get ngmix observations
+    )
+
+    # Convert to DFMdet observations for JAX
+    obs_w_jax = ngmix_obs_to_dfmd_obs(obs_w_ngmix)
+    obs_d_jax = ngmix_obs_to_dfmd_obs(obs_d_ngmix)
+    obs_dn_jax = ngmix_obs_to_dfmd_obs(obs_dn_ngmix)
+
+    # Test parameters
+    shears = ("noshear", "1p", "1m", "2p", "2m")
+    skip_obs_wide_corrections = False
+    skip_obs_deep_corrections = False
+
+    reconv_psf_dk = compute_dk(pixel_scale=0.2, image_size=nxy_psf)
+    reconv_psf_kim_size = compute_kim_size(image_size=nxy_psf)
+
+    # Run non-JAX metacalibration with k_info return for consistency
+    ngmix_result, kinfo = metacal_wide_and_deep_psf_matched(
+        obs_w_ngmix,
+        obs_d_ngmix,
+        obs_dn_ngmix,
+        shears=shears,
+        skip_obs_wide_corrections=skip_obs_wide_corrections,
+        skip_obs_deep_corrections=skip_obs_deep_corrections,
+        return_k_info=True,
+        fft_size=DEFAULT_FFT_SIZE,
+        reconv_psf_dk=reconv_psf_dk,
+        reconv_psf_kim_size=reconv_psf_kim_size,
+    )
+    force_stepk_field, force_maxk_field, force_stepk_psf, force_maxk_psf = kinfo
+
+    print("Running JAX metacalibration...")
+    # Run JAX metacalibration with the same k_info for exact consistency
+    jax_result, jax_k_info = jax_metacal_wide_and_deep_psf_matched(
+        obs_w_jax,
+        obs_d_jax,
+        obs_dn_jax,
+        nxy=nxy,
+        nxy_psf=nxy_psf,
+        shears=shears,
+        skip_obs_wide_corrections=skip_obs_wide_corrections,
+        skip_obs_deep_corrections=skip_obs_deep_corrections,
+        return_k_info=True,
+        force_stepk_field=force_stepk_field,
+        force_maxk_field=force_maxk_field,
+        force_stepk_psf=force_stepk_psf,
+        force_maxk_psf=force_maxk_psf,
+        fft_size=DEFAULT_FFT_SIZE,
+        reconv_psf_dk=reconv_psf_dk,
+        reconv_psf_kim_size=reconv_psf_kim_size,
+    )
+
+    # Extract and verify k_info consistency
+    assert np.allclose(jax_k_info[0], force_stepk_field), "stepk_field mismatch"
+    assert np.allclose(jax_k_info[1], force_maxk_field), "maxk_field mismatch"
+    assert np.allclose(jax_k_info[2], force_stepk_psf), "stepk_psf mismatch"
+    assert np.allclose(jax_k_info[3], force_maxk_psf), "maxk_psf mismatch"
+
+    print("Comparing results...")
+
+    # Compare results for each shear
+    for shear in shears:
+        print(f"Comparing shear: {shear}")
+
+        ngmix_obs = ngmix_result[shear]
+        jax_obs = jax_result[shear]
+
+        # Check that both observations have the same basic properties
+        assert ngmix_obs.image.shape == jax_obs.image.shape, (
+            f"Image shapes differ for {shear}"
+        )
+        assert ngmix_obs.psf.image.shape == jax_obs.psf.image.shape, (
+            f"PSF shapes differ for {shear}"
+        )
+
+        image_diff = np.abs(ngmix_obs.image - jax_obs.image)
+        max_image_diff = np.max(image_diff)
+        print(f" Image - max diff: {max_image_diff:.2e}")
+
+        psf_diff = np.abs(ngmix_obs.psf.image - jax_obs.psf.image)
+        max_psf_diff = np.max(psf_diff)
+        print(f"  PSF - max diff: {max_psf_diff:.2e}")
+
+        weight_diff = np.abs(ngmix_obs.weight - jax_obs.weight)
+        max_weight_diff = np.max(weight_diff)
+        print(f"  Weight - max diff: {max_weight_diff:.2e}")
+
+        assert np.allclose(ngmix_obs.image, jax_obs.image, rtol=1e-7, atol=1e-7), (
+            f"Images differ significantly for {shear}: max_diff={max_image_diff:.2e}"
+        )
+
+        assert np.allclose(
+            ngmix_obs.psf.image, jax_obs.psf.image, rtol=1e-9, atol=1e-9
+        ), f"PSF images differ significantly for {shear}: max_diff={max_psf_diff:.2e}"
+
+        assert np.array_equal(ngmix_obs.weight, jax_obs.weight), (
+            f"weight differs for {shear}"
+        )
+
+        # Compare other attributes if they exist
+        if ngmix_obs.has_bmask() and jax_obs.has_bmask():
+            assert np.array_equal(ngmix_obs.bmask, jax_obs.bmask), (
+                f"bmask differs for {shear}"
+            )
+
+        if ngmix_obs.has_noise() and jax_obs.has_noise():
+            noise_diff = np.max(np.abs(ngmix_obs.noise - jax_obs.noise))
+            print(f"  Noise - max diff: {noise_diff:.2e}")
+            assert np.allclose(
+                ngmix_obs.noise, jax_obs.noise, rtol=1e-10, atol=1e-12
+            ), f"Noise differs significantly for {shear}: max_diff={noise_diff:.2e}"
+
+        if ngmix_obs.has_mfrac() and jax_obs.has_mfrac():
+            mfrac_diff = np.max(np.abs(ngmix_obs.mfrac - jax_obs.mfrac))
+            print(f"  Mfrac - max diff: {mfrac_diff:.2e}")
+            assert np.allclose(
+                ngmix_obs.mfrac, jax_obs.mfrac, rtol=1e-10, atol=1e-12
+            ), f"Mfrac differs significantly for {shear}: max_diff={mfrac_diff:.2e}"
+
+    print(" All metacalibration results match between JAX and non-JAX implementations!")
+
+
+@pytest.mark.parametrize(
+    "skip_wide,skip_deep", [(True, False), (False, True), (False, False)]
+)
+def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix_skip_corrections(
+    skip_wide, skip_deep
+):
+    """
+    Test metacalibration consistency with different skip correction flags.
+
+    This test verifies that the JAX and non-JAX implementations produce identical
+    results when different observation correction flags are used.
+    """
+    nxy = 201
+    nxy_psf = 53
+    scale = 0.2
+    seed = 5678
+
+    # Create test observations
+    obs_w_ngmix, obs_d_ngmix, obs_dn_ngmix = make_simple_sim(
+        seed=seed,
+        g1=0.01,
+        g2=0.01,
+        s2n=1e5,
+        deep_noise_fac=1.0 / np.sqrt(30),
+        deep_psf_fac=0.9,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
+        buff=25,
+        n_objs=2,
+        return_dfmd_obs=False,
+    )
+
+    # Convert to DFMdet observations for JAX
+    obs_w_jax = ngmix_obs_to_dfmd_obs(obs_w_ngmix)
+    obs_d_jax = ngmix_obs_to_dfmd_obs(obs_d_ngmix)
+    obs_dn_jax = ngmix_obs_to_dfmd_obs(obs_dn_ngmix)
+
+    reconv_psf_dk = compute_dk(pixel_scale=0.2, image_size=nxy_psf)
+    reconv_psf_kim_size = compute_kim_size(image_size=nxy_psf)
+
+    # Run non-JAX version to get k_info
+    ngmix_result = metacal_wide_and_deep_psf_matched(
+        obs_w_ngmix,
+        obs_d_ngmix,
+        obs_dn_ngmix,
+        skip_obs_wide_corrections=skip_wide,
+        skip_obs_deep_corrections=skip_deep,
+        return_k_info=True,
+        fft_size=DEFAULT_FFT_SIZE,
+        reconv_psf_dk=reconv_psf_dk,
+        reconv_psf_kim_size=reconv_psf_kim_size,
+    )
+
+    ngmix_result, k_info = ngmix_result
+    force_stepk_field, force_maxk_field, force_stepk_psf, force_maxk_psf = k_info
+
+    # Run JAX version with same k_info
+    jax_result = jax_metacal_wide_and_deep_psf_matched(
+        obs_w_jax,
+        obs_d_jax,
+        obs_dn_jax,
+        nxy=nxy,
+        nxy_psf=nxy_psf,
+        skip_obs_wide_corrections=skip_wide,
+        skip_obs_deep_corrections=skip_deep,
+        force_stepk_field=force_stepk_field,
+        force_maxk_field=force_maxk_field,
+        force_stepk_psf=force_stepk_psf,
+        force_maxk_psf=force_maxk_psf,
+        fft_size=DEFAULT_FFT_SIZE,
+        reconv_psf_dk=reconv_psf_dk,
+        reconv_psf_kim_size=reconv_psf_kim_size,
+    )
+
+    # Compare only the '1p' result for efficiency in parametrized test
+    shear = "1p"
+    ngmix_obs = ngmix_result[shear]
+    jax_obs = jax_result[shear]
+
+    # Check main image comparison
+    image_diff = np.max(np.abs(ngmix_obs.image - jax_obs.image))
+    psf_diff = np.max(np.abs(ngmix_obs.psf.image - jax_obs.psf.image))
+
+    print(
+        f"Skip corrections (wide={skip_wide}, deep={skip_deep}): "
+        f"image_diff={image_diff:.2e}, psf_diff={psf_diff:.2e}"
+    )
+
+    # Verify consistency
+    # Note there whould be some differences becase reconv_psf is not the same
+    # This be cause we did not set the dk and kim_size
+    assert np.allclose(ngmix_obs.image, jax_obs.image, rtol=1e-8, atol=1e-8), (
+        f"Images differ for skip_wide={skip_wide}, skip_deep={skip_deep}"
+    )
+    assert np.allclose(ngmix_obs.psf.image, jax_obs.psf.image, rtol=1e-8, atol=1e-8), (
+        f"PSF images differ for skip_wide={skip_wide}, skip_deep={skip_deep}"
     )
