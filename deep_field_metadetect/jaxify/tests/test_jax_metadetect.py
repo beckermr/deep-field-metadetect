@@ -3,10 +3,11 @@ import multiprocessing
 import numpy as np
 import pytest
 
-from deep_field_metadetect.jaxify.jax_metacal import DEFAULT_FFT_SIZE
+from deep_field_metadetect.jaxify.jax_dfmd_defaults import DEFAULT_FFT_SIZE
 from deep_field_metadetect.jaxify.jax_metadetect import (
     jax_single_band_deep_field_metadetect,
 )
+from deep_field_metadetect.jaxify.jax_utils import compute_dk, compute_kim_size
 from deep_field_metadetect.jaxify.observation import ngmix_obs_to_dfmd_obs
 from deep_field_metadetect.metadetect import single_band_deep_field_metadetect
 from deep_field_metadetect.utils import (
@@ -48,6 +49,9 @@ def _run_single_sim(
         return_dfmd_obs=True,
     )
 
+    dk = compute_dk(image_size=nxy_psf, pixel_scale=scale)
+    kim_size = compute_kim_size(image_size=nxy_psf)
+
     res = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
@@ -56,7 +60,8 @@ def _run_single_sim(
         nxy_psf=nxy_psf,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
-        scale=scale,
+        reconv_psf_dk=dk,
+        reconv_psf_kim_size=kim_size,
     )
     return measure_mcal_shear_quants(res)
 
@@ -121,6 +126,9 @@ def _run_single_sim_jax_and_ngmix(
     obs_d = ngmix_obs_to_dfmd_obs(obs_d_ngmix)
     obs_dn = ngmix_obs_to_dfmd_obs(obs_dn_ngmix)
 
+    dk = compute_dk(image_size=nxy_psf, pixel_scale=scale)
+    kim_size = compute_kim_size(image_size=nxy_psf)
+
     non_jax_results = single_band_deep_field_metadetect(
         obs_w_ngmix,
         obs_d_ngmix,
@@ -144,13 +152,14 @@ def _run_single_sim_jax_and_ngmix(
         nxy_psf=nxy_psf,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
-        scale=scale,
         return_k_info=True,
         force_stepk_field=force_stepk_field,
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
         fft_size=DEFAULT_FFT_SIZE,
+        reconv_psf_dk=dk,
+        reconv_psf_kim_size=kim_size,
     )
 
     res = results[0]
@@ -286,6 +295,8 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
     obs_w = obs_w.replace(
         bmask=rng.choice([0, 1, 3], p=[0.5, 0.25, 0.25], size=obs_w.image.shape)
     )
+    dk = compute_dk(image_size=nxy_psf, pixel_scale=scale)
+    kim_size = compute_kim_size(image_size=nxy_psf)
 
     res = jax_single_band_deep_field_metadetect(
         obs_w,
@@ -295,7 +306,8 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
         nxy_psf=nxy_psf,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
-        scale=scale,
+        reconv_psf_dk=dk,
+        reconv_psf_kim_size=kim_size,
     )
 
     xc = (res["x"] + 0.5).astype(int)
@@ -335,6 +347,9 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
         mfrac=np.float32(rng.uniform(0.5, 0.7, size=obs_w.image.shape))
     )
 
+    dk = compute_dk(image_size=nxy_psf, pixel_scale=scale)
+    kim_size = compute_kim_size(image_size=nxy_psf)
+
     res = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
@@ -343,7 +358,8 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
         nxy_psf=nxy_psf,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
-        scale=scale,
+        reconv_psf_dk=dk,
+        reconv_psf_kim_size=kim_size,
     )
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] == "noshear")
@@ -377,6 +393,8 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
         mfrac=np.float32(rng.uniform(0.5, 0.7, size=obs_w.image.shape))
     )
 
+    dk = compute_dk(image_size=nxy_psf, pixel_scale=scale)
+    kim_size = compute_kim_size(image_size=nxy_psf)
     res = jax_single_band_deep_field_metadetect(
         obs_w,
         obs_d,
@@ -385,7 +403,8 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
         nxy_psf=nxy_psf,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
-        scale=scale,
+        reconv_psf_dk=dk,
+        reconv_psf_kim_size=kim_size,
     )
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] != "noshear")

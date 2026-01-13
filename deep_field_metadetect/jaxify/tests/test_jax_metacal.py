@@ -9,6 +9,7 @@ from deep_field_metadetect.jaxify.jax_metacal import (
     jax_add_dfmd_obs,
     jax_metacal_op_shears,
 )
+from deep_field_metadetect.jaxify.jax_utils import compute_dk, compute_kim_size
 from deep_field_metadetect.jaxify.observation import (
     DFMdetObservation,
     DFMdetPSF,
@@ -45,7 +46,8 @@ def _run_single_sim_pair(seed, s2n):
     mcal_res = jax_metacal_op_shears(
         obs_plus,
         nxy_psf=nxy_psf,
-        scale=scale,
+        reconv_psf_dk=compute_dk(pixel_scale=scale, image_size=nxy_psf),
+        reconv_psf_kim_size=compute_kim_size(image_size=nxy_psf),
     )
     res_p = fit_gauss_mom_mcal_res(mcal_res)
     res_p = measure_mcal_shear_quants(res_p)
@@ -65,7 +67,8 @@ def _run_single_sim_pair(seed, s2n):
     mcal_res = jax_metacal_op_shears(
         obs_minus,
         nxy_psf=nxy_psf,
-        scale=scale,
+        reconv_psf_dk=compute_dk(pixel_scale=scale, image_size=nxy_psf),
+        reconv_psf_kim_size=compute_kim_size(image_size=nxy_psf),
     )
     res_m = fit_gauss_mom_mcal_res(mcal_res)
     res_m = measure_mcal_shear_quants(res_m)
@@ -100,7 +103,8 @@ def _run_single_sim_pair_jax_and_ngmix(seed, s2n):
     mcal_res = jax_metacal_op_shears(
         obs_plus,
         nxy_psf=nxy_psf,
-        scale=scale,
+        reconv_psf_dk=compute_dk(pixel_scale=scale, image_size=nxy_psf),
+        reconv_psf_kim_size=compute_kim_size(image_size=nxy_psf),
     )
     res_p = fit_gauss_mom_mcal_res(mcal_res)
     res_p = measure_mcal_shear_quants(res_p)
@@ -126,7 +130,8 @@ def _run_single_sim_pair_jax_and_ngmix(seed, s2n):
     mcal_res = jax_metacal_op_shears(
         obs_minus,
         nxy_psf=nxy_psf,
-        scale=scale,
+        reconv_psf_dk=compute_dk(pixel_scale=scale, image_size=nxy_psf),
+        reconv_psf_kim_size=compute_kim_size(image_size=nxy_psf),
     )
     res_m = fit_gauss_mom_mcal_res(mcal_res)
     res_m = measure_mcal_shear_quants(res_m)
@@ -276,7 +281,7 @@ def test_jax_vs_ngmix_render_psf_and_build_obs():
         _jax_render_psf_and_build_obs,
         jax_get_gauss_reconv_psf_galsim,
     )
-    from deep_field_metadetect.jaxify.jax_utils import compute_stepk
+    from deep_field_metadetect.jaxify.jax_utils import compute_dk
     from deep_field_metadetect.jaxify.observation import ngmix_obs_to_dfmd_obs
     from deep_field_metadetect.metacal import (
         _render_psf_and_build_obs,
@@ -308,17 +313,16 @@ def test_jax_vs_ngmix_render_psf_and_build_obs():
 
     # JAX version
     jax_psf = jax_galsim.Gaussian(sigma=1.0).withFlux(1.0)
-    dk = compute_stepk(pixel_scale=scale, image_size=nxy_psf)
-    jax_reconv_psf = jax_get_gauss_reconv_psf_galsim(
-        jax_psf, dk=dk, nxy_psf=nxy_psf, kim_size=256
-    )
+    dk = compute_dk(pixel_scale=scale, image_size=nxy_psf)
+    kim_size = compute_kim_size(image_size=nxy_psf)
+    jax_reconv_psf = jax_get_gauss_reconv_psf_galsim(jax_psf, dk=dk, kim_size=kim_size)
     jax_result = _jax_render_psf_and_build_obs(
         test_image, dfmd_obs, jax_reconv_psf, nxy_psf=nxy_psf, weight_fac=1
     )
 
     # ngmix version
     ngmix_psf = galsim.Gaussian(sigma=1.0).withFlux(1.0)
-    ngmix_reconv_psf = get_gauss_reconv_psf_galsim(ngmix_psf, dk=dk, kim_size=256)
+    ngmix_reconv_psf = get_gauss_reconv_psf_galsim(ngmix_psf, dk=dk, kim_size=kim_size)
 
     ngmix_result = _render_psf_and_build_obs(
         test_image, ngmix_obs, ngmix_reconv_psf, weight_fac=1

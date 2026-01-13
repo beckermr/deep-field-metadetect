@@ -7,6 +7,7 @@ from deep_field_metadetect.jaxify.jax_metacal import (
     jax_metacal_op_shears,
     jax_metacal_wide_and_deep_psf_matched,
 )
+from deep_field_metadetect.jaxify.jax_utils import compute_dk, compute_kim_size
 from deep_field_metadetect.jaxify.observation import (
     dfmd_obs_to_ngmix_obs,
     ngmix_obs_to_dfmd_obs,
@@ -58,7 +59,8 @@ def _run_single_sim(
         nxy_psf=53,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
-        scale=scale,
+        reconv_psf_dk=compute_dk(image_size=nxy_psf, pixel_scale=scale),
+        reconv_psf_kim_size=compute_kim_size(image_size=nxy),
     )
     res = fit_gauss_mom_mcal_res(mcal_res)
     return measure_mcal_shear_quants(res)
@@ -111,7 +113,8 @@ def _run_single_sim_jax_and_ngmix(
         nxy_psf=53,
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
-        scale=scale,
+        reconv_psf_dk=compute_dk(image_size=nxy_psf, pixel_scale=scale),
+        reconv_psf_kim_size=compute_kim_size(image_size=nxy),
     )
     res = fit_gauss_mom_mcal_res(mcal_res)
     return measure_mcal_shear_quants(res), measure_mcal_shear_quants(res_ngmix)
@@ -392,7 +395,9 @@ def _run_single_sim_maybe_mcal(
     if use_mcal:
         mcal_res = jax_metacal_op_shears(
             obs_w,
-            scale=scale,
+            nxy_psf=nxy_psf,
+            reconv_psf_dk=compute_dk(pixel_scale=scale, image_size=nxy_psf),
+            reconv_psf_kim_size=compute_kim_size(image_size=nxy_psf),
         )
         for key, value in mcal_res.items():
             mcal_res[key] = dfmd_obs_to_ngmix_obs(value)
@@ -403,7 +408,8 @@ def _run_single_sim_maybe_mcal(
             obs_dn,
             nxy=nxy,
             nxy_psf=nxy_psf,
-            scale=scale,
+            reconv_psf_dk=compute_dk(image_size=nxy_psf, pixel_scale=scale),
+            reconv_psf_kim_size=compute_kim_size(image_size=nxy),
         )
     return fit_gauss_mom_mcal_res(mcal_res), mcal_res
 

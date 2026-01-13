@@ -5,8 +5,8 @@ from deep_field_metadetect.detect import (
     generate_mbobs_for_detections,
     run_detection_sep,
 )
+from deep_field_metadetect.jaxify import jax_dfmd_defaults
 from deep_field_metadetect.jaxify.jax_metacal import (
-    DEFAULT_FFT_SIZE,
     DEFAULT_SHEARS,
     DEFAULT_STEP,
     jax_metacal_wide_and_deep_psf_matched,
@@ -26,13 +26,14 @@ def jax_single_band_deep_field_metadetect(
     skip_obs_wide_corrections=False,
     skip_obs_deep_corrections=False,
     nodet_flags=0,
-    scale=0.2,
     return_k_info=False,
     force_stepk_field=0.0,
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=DEFAULT_FFT_SIZE,
+    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
+    reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
 ):
     """Run deep-field metadetection for a simple scenario of a single band
     with a single image per band using only post-PSF Gaussian weighted moments.
@@ -62,14 +63,6 @@ def jax_single_band_deep_field_metadetect(
         by default False.
     nodet_flags : int, optional
         The bmask flags marking area in the image to skip, by default 0.
-    scale: float
-        pixel scale
-    scale : float, optional
-        pixel scale. default to 0.2.
-        Note this parameter is not present in non-jax version.
-        This is later used for compute_stepk to compute the pixel scale in
-        fourier space and this is a static variable so changing it would
-        trigger recompilation.
     return_k_info : bool, optional
         return _force stepk and maxk values in the following order
         _force_stepk_field, _force_maxk_field, _force_stepk_psf, _force_maxk_psf.
@@ -94,16 +87,22 @@ def jax_single_band_deep_field_metadetect(
         To fix max and min values of FFT size.
         Defaults to None which lets Galsim determine the values.
         Used mainly to test against JaxGalsim.
+    reconv_psf_dk: float
+        The Fourier-space pixel scale used for reconv psf computation.
+        Default: jax_defaults.DEFAULT_RECONV_DK
+    reconv_psf_kim_size: int
+        k image size used for reconv psf computation
+        Default: jax_defaults.DEFAULT_KIM_SIZE
 
     Returns
     -------
     dfmdet_res : numpy.ndarray
         The deep-field metadetection results as a structured array containing
         detection and measurement results for all shears.
-
-    Note: If return_k_info is set to True for debugging,
-    this function returns a tuple containing (dfmdet_res, kinfo). kinfo being:
-    (_force_stepk_field, _force_maxk_field, _force_stepk_psf, _force_maxk_psf)
+    kinfo: tuple [Optional if return_k_info is True]
+        For debugging.
+        kinfo is returned in the following order:
+        _force_stepk_field, _force_maxk_field, _force_stepk_psf, _force_maxk_psf.
     """
     if shears is None:
         shears = DEFAULT_SHEARS
@@ -118,14 +117,18 @@ def jax_single_band_deep_field_metadetect(
         shears=shears,
         skip_obs_wide_corrections=skip_obs_wide_corrections,
         skip_obs_deep_corrections=skip_obs_deep_corrections,
-        scale=scale,
         return_k_info=return_k_info,
         force_stepk_field=force_stepk_field,
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
         fft_size=fft_size,
+        reconv_psf_dk=reconv_psf_dk,
+        reconv_psf_kim_size=reconv_psf_kim_size,
     )  # This returns ngmix Obs for now
+
+    if return_k_info:
+        mcal_res, kinfo = mcal_res
 
     psf_res = fit_gauss_mom_obs(mcal_res["noshear"].psf)
     dfmdet_res = []
@@ -171,6 +174,6 @@ def jax_single_band_deep_field_metadetect(
     ] + fres.dtype.descr
 
     if return_k_info:
-        return (np.array(dfmdet_res, dtype=total_dtype), mcal_res.get("kinfo"))
+        return (np.array(dfmdet_res, dtype=total_dtype), kinfo)
 
     return np.array(dfmdet_res, dtype=total_dtype)

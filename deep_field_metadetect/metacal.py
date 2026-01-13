@@ -71,27 +71,31 @@ def get_gauss_reconv_psf_galsim(psf, step=DEFAULT_STEP, flux=1, dk=None, kim_siz
     return galsim.Gaussian(sigma=np.sqrt(sigma_sq) * dilation).withFlux(flux)
 
 
-def get_gauss_reconv_psf(obs, step=DEFAULT_STEP):
+def get_gauss_reconv_psf(obs, step=DEFAULT_STEP, dk=None, kim_size=None):
     """Get the Gaussian reconv PSF for an ngmix obs."""
     psf = get_galsim_object_from_ngmix_obs_nopix(obs.psf, kind="image")
-    return get_gauss_reconv_psf_galsim(psf, step=step)
+    return get_gauss_reconv_psf_galsim(psf, step=step, dk=dk, kim_size=kim_size)
 
 
-def get_max_gauss_reconv_psf_galsim(psf_w, psf_d, step=DEFAULT_STEP):
+def get_max_gauss_reconv_psf_galsim(
+    psf_w, psf_d, step=DEFAULT_STEP, dk=None, kim_size=None
+):
     """Get the larger of two Gaussian reconvolution PSFs for two galsim objects."""
-    mc_psf_w = get_gauss_reconv_psf_galsim(psf_w, step=step)
-    mc_psf_d = get_gauss_reconv_psf_galsim(psf_d, step=step)
+    mc_psf_w = get_gauss_reconv_psf_galsim(psf_w, step=step, dk=dk, kim_size=kim_size)
+    mc_psf_d = get_gauss_reconv_psf_galsim(psf_d, step=step, dk=dk, kim_size=kim_size)
     if mc_psf_w.fwhm > mc_psf_d.fwhm:
         return mc_psf_w
     else:
         return mc_psf_d
 
 
-def get_max_gauss_reconv_psf(obs_w, obs_d, step=DEFAULT_STEP):
+def get_max_gauss_reconv_psf(obs_w, obs_d, step=DEFAULT_STEP, dk=None, kim_size=None):
     """Get the larger of two reconv PSFs for two ngmix.Observations."""
     psf_w = get_galsim_object_from_ngmix_obs_nopix(obs_w.psf, kind="image")
     psf_d = get_galsim_object_from_ngmix_obs_nopix(obs_d.psf, kind="image")
-    return get_max_gauss_reconv_psf_galsim(psf_w, psf_d, step=step)
+    return get_max_gauss_reconv_psf_galsim(
+        psf_w, psf_d, step=step, dk=dk, kim_size=kim_size
+    )
 
 
 def _render_psf_and_build_obs(image, obs, reconv_psf, weight_fac=1, fft_size=None):
@@ -183,14 +187,22 @@ def metacal_op_g1g2(obs, reconv_psf, g1, g2, fft_size=None):
 
 
 def metacal_op_shears(
-    obs, reconv_psf=None, shears=None, step=DEFAULT_STEP, fft_size=None
+    obs,
+    reconv_psf=None,
+    shears=None,
+    step=DEFAULT_STEP,
+    fft_size=None,
+    reconv_psf_dk=None,
+    reconv_psf_kim_size=None,
 ):
     """Run metacal on an ngmix observation."""
     if shears is None:
         shears = DEFAULT_SHEARS
 
     if reconv_psf is None:
-        reconv_psf = get_gauss_reconv_psf(obs, step=step)
+        reconv_psf = get_gauss_reconv_psf(
+            obs, step=step, dk=reconv_psf_dk, kim_size=reconv_psf_kim_size
+        )
 
     wcs = obs.jacobian.get_galsim_wcs()
     image = get_galsim_object_from_ngmix_obs(obs, kind="image")
@@ -398,6 +410,8 @@ def metacal_wide_and_deep_psf_matched(
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
     fft_size=None,
+    reconv_psf_dk=None,
+    reconv_psf_kim_size=None,
 ):
     """Do metacalibration for a combination of wide+deep datasets.
 
@@ -446,19 +460,28 @@ def metacal_wide_and_deep_psf_matched(
         To fix max and min values of FFT size.
         Defaults to None which lets Galsim determine the values.
         Used mainly to test against Galsim.
+    reconv_psf_dk: float
+        The Fourier-space pixel scale used for reconv_psf computation
+        Default None let's Galsim fix the value
+    reconv_psf_kim_size: int
+        k image size used for reconv_psf computation
+        Defaults to None, which lets Galsim set the size
 
     Returns
     -------
-    mcal_res : dict
+    mcal_res: dict
         Output from metacal_op_shears for shear cases listed by the shears input,
         optionaly no shear deep field case if return_noshear_deep is True
-        and kinfo for debugging if return_k_info is set to True.
+    kinfo: tuple [Optional if return_k_info is True]
+        For debugging.
         kinfo is returned in the following order:
         _force_stepk_field, _force_maxk_field, _force_stepk_psf, _force_maxk_psf.
     """
 
     # first get the biggest reconv PSF of the two
-    reconv_psf = get_max_gauss_reconv_psf(obs_wide, obs_deep)
+    reconv_psf = get_max_gauss_reconv_psf(
+        obs_wide, obs_deep, dk=reconv_psf_dk, kim_size=reconv_psf_kim_size
+    )
     mcal_obs_wide = match_psf(
         obs_wide,
         reconv_psf,
@@ -502,6 +525,8 @@ def metacal_wide_and_deep_psf_matched(
         shears=shears,
         step=step,
         fft_size=fft_size,
+        reconv_psf_dk=reconv_psf_dk,
+        reconv_psf_kim_size=reconv_psf_kim_size,
     )
 
     # now add in noise corr to make it match the wide noise
@@ -523,6 +548,6 @@ def metacal_wide_and_deep_psf_matched(
         mcal_res[k].psf.galsim_obj = reconv_psf
 
     if return_k_info:
-        mcal_res["kinfo"] = kinfo
+        return mcal_res, kinfo
 
     return mcal_res
