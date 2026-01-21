@@ -5,19 +5,22 @@ from deep_field_metadetect.detect import (
     generate_mbobs_for_detections,
     run_detection_sep,
 )
-from deep_field_metadetect.metacal import (
+from deep_field_metadetect.jaxify import jax_dfmd_defaults
+from deep_field_metadetect.jaxify.jax_metacal import (
     DEFAULT_SHEARS,
     DEFAULT_STEP,
-    metacal_wide_and_deep_psf_matched,
+    jax_metacal_wide_and_deep_psf_matched,
 )
 from deep_field_metadetect.mfrac import compute_mfrac_interp_image
 from deep_field_metadetect.utils import fit_gauss_mom_obs, fit_gauss_mom_obs_and_psf
 
 
-def single_band_deep_field_metadetect(
+def jax_single_band_deep_field_metadetect(
     obs_wide,
     obs_deep,
     obs_deep_noise,
+    nxy,
+    nxy_psf,
     step=DEFAULT_STEP,
     shears=None,
     skip_obs_wide_corrections=False,
@@ -28,19 +31,25 @@ def single_band_deep_field_metadetect(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=None,
+    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
+    reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
 ):
     """Run deep-field metadetection for a simple scenario of a single band
     with a single image per band using only post-PSF Gaussian weighted moments.
 
     Parameters
     ----------
-    obs_wide : ngmix.Observation
+    obs_wide : DFMdetObservation
         The wide-field observation.
-    obs_deep : ngmix.Observation
+    obs_deep : DFMdetObservation
         The deep-field observation.
-    obs_deep_noise : ngmix.Observation
+    obs_deep_noise : DFMdetObservation
         The deep-field noise observation.
+    nxy: int
+        Image size
+    nxy_psf: int
+        PSF size
     step : float, optional
         The step size for the metacalibration, by default DEFAULT_STEP.
     shears : list, optional
@@ -60,7 +69,7 @@ def single_band_deep_field_metadetect(
         Used mainly for testing.
     force_stepk_field : float, optional
         Force stepk for drawing field images.
-        Defaults to 0.0, which lets Galsim choose the value.
+        Defaults to 0.0, which lets JaxGalsim choose the value.
         Used mainly for testing.
     force_maxk_field: float, optional
         Force maxk for drawing field images.
@@ -77,7 +86,13 @@ def single_band_deep_field_metadetect(
     fft_size: int, optional
         To fix max and min values of FFT size.
         Defaults to None which lets Galsim determine the values.
-        Used mainly to test against Galsim.
+        Used mainly to test against JaxGalsim.
+    reconv_psf_dk: float
+        The Fourier-space pixel scale used for reconv psf computation.
+        Default: jax_defaults.DEFAULT_RECONV_DK
+    reconv_psf_kim_size: int
+        k image size used for reconv psf computation
+        Default: jax_defaults.DEFAULT_KIM_SIZE
 
     Returns
     -------
@@ -92,10 +107,12 @@ def single_band_deep_field_metadetect(
     if shears is None:
         shears = DEFAULT_SHEARS
 
-    mcal_res = metacal_wide_and_deep_psf_matched(
-        obs_wide,
-        obs_deep,
-        obs_deep_noise,
+    mcal_res = jax_metacal_wide_and_deep_psf_matched(
+        obs_wide=obs_wide,
+        obs_deep=obs_deep,
+        obs_deep_noise=obs_deep_noise,
+        nxy=nxy,
+        nxy_psf=nxy_psf,
         step=step,
         shears=shears,
         skip_obs_wide_corrections=skip_obs_wide_corrections,
@@ -106,7 +123,9 @@ def single_band_deep_field_metadetect(
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
         fft_size=fft_size,
-    )
+        reconv_psf_dk=reconv_psf_dk,
+        reconv_psf_kim_size=reconv_psf_kim_size,
+    )  # This returns ngmix Obs for now
 
     if return_k_info:
         mcal_res, kinfo = mcal_res
