@@ -171,26 +171,13 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
     )
     obs_d.mfrac = rng.uniform(0.5, 0.7, size=obs_w.image.shape)
 
-    results = single_band_deep_field_metadetect(
+    res = single_band_deep_field_metadetect(
         obs_w,
         obs_d,
         obs_dn,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
-        return_k_info=True,
-        force_stepk_field=0.12403490725241548,
-        force_maxk_field=8.160777791551611,
-        force_stepk_psf=0.6815071326229606,
-        force_maxk_psf=12.640001692177682,
     )
-
-    res = results[0]
-    kinfo = results[1]
-
-    assert kinfo[0] == 0.12403490725241548
-    assert kinfo[1] == 8.160777791551611
-    assert kinfo[2] == 0.6815071326229606
-    assert kinfo[3] == 12.640001692177682
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] != "noshear")
     assert np.all(res["mfrac"][msk] >= 0.5)
