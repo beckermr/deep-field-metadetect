@@ -6,10 +6,9 @@ import jax.numpy as jnp
 import jax_galsim
 import numpy as np
 
-import deep_field_metadetect.jaxify.jax_dfmd_defaults as jax_defaults
+from deep_field_metadetect.jaxify import jax_dfmd_defaults
 from deep_field_metadetect.jaxify.observation import (
     DFMdetObservation,
-    dfmd_obs_to_ngmix_obs,
 )
 from deep_field_metadetect.metacal import DEFAULT_SHEARS, DEFAULT_STEP
 
@@ -172,7 +171,7 @@ def _jax_render_psf_and_build_obs(
     reconv_psf,
     nxy_psf,
     weight_fac=1,
-    fft_size=jax_defaults.DEFAULT_FFT_SIZE,
+    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
 ):
     reconv_psf = reconv_psf.withGSParams(
         minimum_fft_size=fft_size,
@@ -206,7 +205,7 @@ def _jax_metacal_op_g1g2_impl(
     reconv_psf,
     g1,
     g2,
-    fft_size=jax_defaults.DEFAULT_FFT_SIZE,
+    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
 ):
     """Run metacal on an dfmd observation.
 
@@ -245,7 +244,7 @@ def _jax_metacal_op_g1g2_impl(
 
 
 def jax_metacal_op_g1g2(
-    dfmd_obs, reconv_psf, g1, g2, nxy_psf, fft_size=jax_defaults.DEFAULT_FFT_SIZE
+    dfmd_obs, reconv_psf, g1, g2, nxy_psf, fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE
 ):
     """Run metacal on an dfmd observation with specified shear.
 
@@ -262,7 +261,8 @@ def jax_metacal_op_g1g2(
     nxy_psf : int
         Size of the PSF image in pixels.
     fft_size : int, optional
-        FFT size for convolution operations (default is jax_defaults.DEFAULT_FFT_SIZE).
+        FFT size for convolution operations.
+        Default is jax_dfmd_defaults.DEFAULT_FFT_SIZE.
 
     Returns
     -------
@@ -307,13 +307,13 @@ def jax_metacal_op_g1g2(
 )
 def jax_metacal_op_shears(
     dfmd_obs,
-    nxy_psf=jax_defaults.DEFAULT_NXY_PSF,
+    nxy_psf=jax_dfmd_defaults.DEFAULT_NXY_PSF,
     reconv_psf=jax_galsim.Gaussian(sigma=0.0).withFlux(1.0),
     shears=DEFAULT_SHEARS,
     step=DEFAULT_STEP,
-    fft_size=jax_defaults.DEFAULT_FFT_SIZE,
-    reconv_psf_dk=jax_defaults.DEFAULT_RECONV_DK,
-    reconv_psf_kim_size=jax_defaults.DEFAULT_KIM_SIZE,
+    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
+    reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
 ):
     """Run metacal on an dfmd observation with multiple shear values.
 
@@ -322,7 +322,8 @@ def jax_metacal_op_shears(
     dfmd_obs : DFMdetObservation
         The observation to process.
     nxy_psf : int, optional
-        Size of the PSF image in pixels (default is jax_defaults.DEFAULT_NXY_PSF).
+        Size of the PSF image in pixels.
+        Default is jax_dfmd_defaults.DEFAULT_NXY_PSF.
     reconv_psf : jax_galsim.GSObject, optional
         The reconvolution PSF.
         Default: a proper reconvolution PSF will be computed automatically.
@@ -332,13 +333,14 @@ def jax_metacal_op_shears(
     step : float, optional
         Shear step magnitude (default is DEFAULT_STEP).
     fft_size : int, optional
-        FFT size for convolution operations (default is jax_defaults.DEFAULT_FFT_SIZE).
+        FFT size for convolution operations.
+        Default is jax_dfmd_defaults.DEFAULT_FFT_SIZE.
     reconv_psf_dk: float
         The Fourier-space pixel scale used for reconv psf computation.
-        Default: jax_defaults.DEFAULT_RECONV_DK
+        Default: jax_dfmd_defaults.DEFAULT_RECONV_DK
     reconv_psf_kim_size: int
         k image size used for reconv psf computation
-        Default: jax_defaults.DEFAULT_KIM_SIZE
+        Default: jax_dfmd_defaults.DEFAULT_KIM_SIZE
 
     Returns
     -------
@@ -426,7 +428,7 @@ def jax_match_psf(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=jax_defaults.DEFAULT_FFT_SIZE,
+    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
 ):
     """Match the PSF on an dfmd observation to a new PSF."""
     wcs = dfmd_obs.wcs.local()
@@ -664,9 +666,9 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=jax_defaults.DEFAULT_FFT_SIZE,
-    reconv_psf_dk=jax_defaults.DEFAULT_RECONV_DK,
-    reconv_psf_kim_size=jax_defaults.DEFAULT_KIM_SIZE,
+    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
+    reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
 ):
     """Do metacalibration for a combination of wide+deep datasets.
 
@@ -720,10 +722,10 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
         Used mainly to test against JaxGalsim.
     reconv_psf_dk: float
         The Fourier-space pixel scale used for reconv psf computation.
-        Default: jax_defaults.DEFAULT_RECONV_DK
+        Default: jax_dfmd_defaults.DEFAULT_RECONV_DK
     reconv_psf_kim_size: int
         k image size used for reconv psf computation
-        Default: jax_defaults.DEFAULT_KIM_SIZE
+        Default: jax_dfmd_defaults.DEFAULT_KIM_SIZE
 
     Returns
     -------
@@ -809,6 +811,25 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
     return mcal_res
 
 
+@partial(
+    jax.jit,
+    static_argnames=[
+        "nxy",
+        "nxy_psf",
+        "shears",
+        "skip_obs_wide_corrections",
+        "skip_obs_deep_corrections",
+        "return_noshear_deep",
+        "return_k_info",
+        "force_stepk_field",
+        "force_maxk_field",
+        "force_stepk_psf",
+        "force_maxk_psf",
+        "fft_size",
+        "reconv_psf_dk",
+        "reconv_psf_kim_size",
+    ],
+)
 def jax_metacal_wide_and_deep_psf_matched(
     obs_wide,
     obs_deep,
@@ -825,9 +846,9 @@ def jax_metacal_wide_and_deep_psf_matched(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=jax_defaults.DEFAULT_FFT_SIZE,
-    reconv_psf_dk=jax_defaults.DEFAULT_RECONV_DK,
-    reconv_psf_kim_size=jax_defaults.DEFAULT_KIM_SIZE,
+    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
+    reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
 ):
     """Do metacalibration for a combination of wide+deep datasets.
 
@@ -879,10 +900,10 @@ def jax_metacal_wide_and_deep_psf_matched(
         Used mainly to test against JaxGalsim.
     reconv_psf_dk: float
         The Fourier-space pixel scale used for reconv psf computation.
-        Default: jax_defaults.DEFAULT_RECONV_DK
+        Default: jax_dfmd_defaults.DEFAULT_RECONV_DK
     reconv_psf_kim_size: int
         k image size used for reconv psf computation
-        Default: jax_defaults.DEFAULT_KIM_SIZE
+        Default: jax_dfmd_defaults.DEFAULT_KIM_SIZE
 
     Returns
     -------
@@ -921,10 +942,6 @@ def jax_metacal_wide_and_deep_psf_matched(
 
     if return_k_info:
         mcal_res, kinfo = mcal_res
-
-    for k in shears:
-        mcal_res[k] = dfmd_obs_to_ngmix_obs(mcal_res[k])
-        mcal_res[k].psf.galsim_obj = reconv_psf
 
     if return_k_info:
         return mcal_res, kinfo
