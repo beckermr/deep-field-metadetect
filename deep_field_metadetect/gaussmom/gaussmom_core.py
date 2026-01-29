@@ -136,7 +136,7 @@ class GaussMomData(NamedTuple):
         return cls(*children)
 
 
-def obs_to_gaussmom_obs(obs: ngmix.Observation) -> GaussMomObs:
+def nigmix_obs_to_gaussmom_obs(obs: ngmix.Observation) -> GaussMomObs:
     x, y = jnp.meshgrid(
         jnp.arange(obs.image.shape[1], dtype=float),
         jnp.arange(obs.image.shape[0], dtype=float),
