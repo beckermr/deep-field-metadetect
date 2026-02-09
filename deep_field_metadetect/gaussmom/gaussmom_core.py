@@ -4,6 +4,8 @@ import jax
 import jax.numpy as jnp
 import ngmix
 
+from deep_field_metadetect.jaxify.observation import DFMdetObservation
+
 
 @jax.tree_util.register_pytree_node_class
 class GaussMomObs(NamedTuple):
@@ -152,5 +154,24 @@ def nigmix_obs_to_gaussmom_obs(obs: ngmix.Observation) -> GaussMomObs:
         obs.image,
         obs.jacobian.dudcol * obs.jacobian.dvdrow
         - obs.jacobian.dudrow * obs.jacobian.dvdcol,
+        obs.weight,
+    )
+
+
+def dfmd_obs_to_gaussmom_obs(obs: DFMdetObservation) -> GaussMomObs:
+    x, y = jnp.meshgrid(
+        jnp.arange(obs.image.shape[1], dtype=float),
+        jnp.arange(obs.image.shape[0], dtype=float),
+    )
+    dx = x - (obs.wcs.origin.x - 1)
+    dy = y - (obs.wcs.origin.y - 1)
+    u = obs.wcs.dudx * dx + obs.wcs.dudy * dy
+    v = obs.wcs.dvdx * dx + obs.wcs.dvdy * dy
+
+    return GaussMomObs(
+        u,
+        v,
+        obs.image,
+        obs.wcs.dudx * obs.wcs.dvdy - obs.wcs.dudy * obs.wcs.dvdx,
         obs.weight,
     )
