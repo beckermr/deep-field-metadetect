@@ -940,10 +940,4 @@ def jax_metacal_wide_and_deep_psf_matched(
         fft_size=fft_size,
     )
 
-    if return_k_info:
-        mcal_res, kinfo = mcal_res
-
-    if return_k_info:
-        return mcal_res, kinfo
-
     return mcal_res
