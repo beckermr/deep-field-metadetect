@@ -635,7 +635,6 @@ def jax_generate_subobs_for_detections(
         sub-observation.
     """
     half_box_size = box_size // 2
-    print(xs)
 
     for i, (x, y) in enumerate(zip(xs, ys)):
         ix = int(x)

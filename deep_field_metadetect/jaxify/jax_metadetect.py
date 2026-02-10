@@ -1,18 +1,29 @@
-import ngmix
+import jax
+import jax.numpy as jnp
 import numpy as np
 
 from deep_field_metadetect.detect import (
-    generate_mbobs_for_detections,
     run_detection_sep,
 )
 from deep_field_metadetect.jaxify import jax_dfmd_defaults
+from deep_field_metadetect.jaxify.jax_detection import (
+    detect_galaxies,
+    jax_generate_subobs_for_detections,
+)
 from deep_field_metadetect.jaxify.jax_metacal import (
     DEFAULT_SHEARS,
     DEFAULT_STEP,
     jax_metacal_wide_and_deep_psf_matched,
 )
-from deep_field_metadetect.mfrac import compute_mfrac_interp_image
-from deep_field_metadetect.utils import fit_gauss_mom_obs, fit_gauss_mom_obs_and_psf
+from deep_field_metadetect.jaxify.jax_mfrac import jax_compute_mfrac_interp_image
+from deep_field_metadetect.jaxify.jax_utils import (
+    jax_fit_gauss_mom_obs,
+    jax_fit_single_detection,
+    stack_detection_results,
+)
+from deep_field_metadetect.jaxify.observation import (
+    dfmd_obs_to_ngmix_obs,
+)
 
 
 def jax_single_band_deep_field_metadetect(
@@ -34,6 +45,9 @@ def jax_single_band_deep_field_metadetect(
     fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
     reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
     reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
+    max_objects=jax_dfmd_defaults.MAX_OBJECTS,
+    use_sep=False,
+    return_debug_info=False,
 ):
     """Run deep-field metadetection for a simple scenario of a single band
     with a single image per band using only post-PSF Gaussian weighted moments.
@@ -93,16 +107,30 @@ def jax_single_band_deep_field_metadetect(
     reconv_psf_kim_size: int
         k image size used for reconv psf computation
         Default: jax_defaults.DEFAULT_KIM_SIZE
+    max_objects: int
+        Max number of objects in a field
+    use_sep: bool
+        use sep for detection. Otherwise jax peak finder is used.
+    return_debug_info: bool
+        return detections and mcal_res for debugging
 
     Returns
     -------
-    dfmdet_res : numpy.ndarray
-        The deep-field metadetection results as a structured array containing
-        detection and measurement results for all shears.
-    kinfo: tuple [Optional if return_k_info is True]
-        For debugging.
-        kinfo is returned in the following order:
-        _force_stepk_field, _force_maxk_field, _force_stepk_psf, _force_maxk_psf.
+    dfmdet_res : dict
+        The deep-field metadetection results as a dictionary containing
+        detection and measurement results for all shears. Keys include:
+        - id, x, y, mdet_step, bmask_flags, mfrac
+        - wmom_flags, wmom_g1, wmom_g2, wmom_T_ratio, wmom_psf_T, wmom_s2n
+        Each value is a 1D array with shape (n_total_detections,).
+        Note: mdet_step is a NumPy string array ('U7'), all others are JAX arrays.
+    mcal_res : dict
+        The metacalibration results.
+    detections : list
+        List of detection catalogs for each shear.
+
+    Note: If return_k_info is set to True for debugging,
+    the function returns a tuple containing ((dfmdet_res, kinfo), mcal_res, detections).
+    kinfo: (_force_stepk_field, _force_maxk_field, _force_stepk_psf, _force_maxk_psf)
     """
     if shears is None:
         shears = DEFAULT_SHEARS
@@ -130,50 +158,99 @@ def jax_single_band_deep_field_metadetect(
     if return_k_info:
         mcal_res, kinfo = mcal_res
 
-    psf_res = fit_gauss_mom_obs(mcal_res["noshear"].psf)
-    dfmdet_res = []
-    for shear in shears:
-        obs = mcal_res[shear]
-        detres = run_detection_sep(obs, nodet_flags=nodet_flags)
+    psf_res = jax_fit_gauss_mom_obs(mcal_res["noshear"].psf)  # jitted
+    all_detection_results = []
+    detections = []
+    for shear_idx, shear in enumerate(shears):
+        obs = dfmd_obs_to_ngmix_obs(mcal_res[shear])  # TODO: remove this
 
-        ixc = (detres["catalog"]["x"] + 0.5).astype(int)
-        iyc = (detres["catalog"]["y"] + 0.5).astype(int)
-        bmask_flags = obs.bmask[iyc, ixc]
+        if use_sep:
+            detres = run_detection_sep(obs, nodet_flags=nodet_flags)
+            print("num detections : " + str(len(detres["catalog"]["x"])))
 
-        mfrac_vals = np.zeros_like(bmask_flags, dtype="f4")
-        if np.any(obs.mfrac > 0):
-            _interp_mfrac = compute_mfrac_interp_image(
-                obs.mfrac,
-                obs.jacobian.get_galsim_wcs(),
+            ixc = (detres["catalog"]["x"] + 0.5).astype(int)
+            iyc = (detres["catalog"]["y"] + 0.5).astype(int)
+            bmask_flags = obs.bmask[iyc, ixc]
+            detections.append(detres["catalog"])
+
+            x_coords = detres["catalog"]["x"]
+            y_coords = detres["catalog"]["y"]
+        else:
+            _, detres, _ = detect_galaxies(
+                obs.image, noise=1e-5, max_objects=max_objects
+            )  # TODO: Noise threshold
+            valid_peak_mask = (detres[:, 0] >= 0) & (detres[:, 1] >= 0)
+            detres = detres[valid_peak_mask]
+
+            print("Num detections " + str(len(detres)))
+
+            # Extract coordinates
+            x_coords = detres[:, 0]  # TODO: check if invalid peaks handled well
+            y_coords = detres[:, 0]
+
+            ixc = (x_coords + 0.5).astype(int)
+            iyc = (y_coords + 0.5).astype(int)
+            bmask_flags = mcal_res[shear].bmask[iyc, ixc]
+            detections.append(detres)
+
+        def get_mfrac_values():
+            """Compute interpolated mfrac values."""
+            _interp_mfrac = jax_compute_mfrac_interp_image(
+                mcal_res[shear].mfrac,
+                mcal_res[shear].wcs.local(),
             )
-            for i, (x, y) in enumerate(
-                zip(detres["catalog"]["x"], detres["catalog"]["y"])
-            ):
-                mfrac_vals[i] = _interp_mfrac.xValue(x, y)
 
-        for ind, (obj, mbobs) in enumerate(
-            generate_mbobs_for_detections(
-                ngmix.observation.get_mb_obs(obs),
-                xs=detres["catalog"]["x"],
-                ys=detres["catalog"]["y"],
+            mfrac_vals = jax.vmap(lambda x, y: _interp_mfrac.xValue(x, y))(
+                x_coords, y_coords
+            )
+            return mfrac_vals
+
+        def get_zero_mfrac():
+            """Return zeros when no mfrac data."""
+            return jnp.zeros_like(bmask_flags, dtype=jnp.float64)
+
+        mfrac_vals = jax.lax.cond(
+            jnp.any(mcal_res[shear].mfrac > 0), get_mfrac_values, get_zero_mfrac
+        )
+
+        for ind, (obj, subobs) in enumerate(
+            jax_generate_subobs_for_detections(
+                mcal_res[shear],
+                xs=x_coords,
+                ys=y_coords,
             )
         ):
-            fres = fit_gauss_mom_obs_and_psf(mbobs[0][0], psf_res=psf_res)
-            dfmdet_res.append(
-                (ind + 1, obj["x"], obj["y"], shear, bmask_flags[ind], mfrac_vals[ind])
-                + tuple(fres[0])
+            # Process single detection and get PyTree result
+            single_result = jax_fit_single_detection(
+                mbobs=subobs,
+                psf_res=psf_res,
+                obj_id=ind + 1,
+                obj_x=obj["x"],
+                obj_y=obj["y"],
+                shear_idx=shear_idx,
+                bmask_flag=bmask_flags[ind],
+                mfrac_val=mfrac_vals[ind],
             )
+            all_detection_results.append(single_result)
 
-    total_dtype = [
-        ("id", "i8"),
-        ("x", "f8"),
-        ("y", "f8"),
-        ("mdet_step", "U7"),
-        ("bmask_flags", "i4"),
-        ("mfrac", "f4"),
-    ] + fres.dtype.descr
+    # Stack all detection results into arrays
+    dfmdet_res = stack_detection_results(all_detection_results)
+
+    # Convert mdet_step_idx integers to string labels to match original format
+    # TODO: check if the string can be returned directly
+    mdet_step_strings = np.array(
+        [DEFAULT_SHEARS[int(idx)] for idx in dfmdet_res["mdet_step_idx"]], dtype="U7"
+    )
+    dfmdet_res["mdet_step"] = mdet_step_strings
+    del dfmdet_res["mdet_step_idx"]
+
+    if return_debug_info:
+        if return_k_info:
+            return (dfmdet_res, kinfo), mcal_res, detections
+
+        return dfmdet_res, mcal_res, detections
 
     if return_k_info:
-        return (np.array(dfmdet_res, dtype=total_dtype), kinfo)
+        return (dfmdet_res, kinfo)
 
-    return np.array(dfmdet_res, dtype=total_dtype)
+    return dfmdet_res

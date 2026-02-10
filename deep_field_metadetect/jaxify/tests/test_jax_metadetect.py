@@ -62,6 +62,7 @@ def _run_single_sim(
         skip_obs_deep_corrections=skip_deep,
         reconv_psf_dk=dk,
         reconv_psf_kim_size=kim_size,
+        use_sep=True,
     )
     return measure_mcal_shear_quants(res)
 
@@ -160,6 +161,7 @@ def _run_single_sim_jax_and_ngmix(
         fft_size=DEFAULT_FFT_SIZE,
         reconv_psf_dk=dk,
         reconv_psf_kim_size=kim_size,
+        use_sep=True,
     )
 
     res = results[0]
