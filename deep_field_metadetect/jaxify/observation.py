@@ -102,17 +102,17 @@ class DFMdetObservation:
         store_pixels=True,
         ignore_zero_weight=True,
     ):
-        image = image
+        image = image.astype(float)
         if weight is None:
-            weight = jnp.ones_like(image, dtype=jnp.float32)
+            weight = jnp.ones_like(image)
         if bmask is None:
             bmask = jnp.zeros_like(image, dtype=jnp.int32)
         if ormask is None:
             ormask = jnp.zeros_like(image, dtype=jnp.int32)
         if noise is None:
-            noise = jnp.zeros_like(image, dtype=jnp.float32)
+            noise = jnp.zeros_like(image)
         if mfrac is None:
-            mfrac = jnp.zeros_like(image, dtype=jnp.float32)
+            mfrac = jnp.zeros_like(image)
         if meta is None:
             meta = {}
 
@@ -232,7 +232,7 @@ def ngmix_obs_to_dfmd_obs(obs: ngmix.observation.Observation) -> DFMdetObservati
         psf_obs = obs.get_psf()
         psf_jacobian = psf_obs.get_jacobian()
         psf = DFMdetPSF(
-            image=psf_obs.image,
+            image=psf_obs.image.astype(float),
             wcs=jax_galsim.wcs.AffineTransform(
                 dudx=psf_jacobian.dudcol,
                 dudy=psf_jacobian.dudrow,
