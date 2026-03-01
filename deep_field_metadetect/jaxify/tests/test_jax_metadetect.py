@@ -286,7 +286,7 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
         g2=0.00,
         s2n=1000,
         deep_noise_fac=1.0 / np.sqrt(10),
-        deep_psf_fac=1,
+        deep_psf_fac=1.0,
         dim=nxy,
         dim_psf=nxy_psf,
         scale=scale,
