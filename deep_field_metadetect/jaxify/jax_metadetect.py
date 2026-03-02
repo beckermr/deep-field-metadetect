@@ -8,7 +8,7 @@ from deep_field_metadetect.detect import (
 from deep_field_metadetect.jaxify import jax_dfmd_defaults
 from deep_field_metadetect.jaxify.jax_detection import (
     detect_galaxies,
-    jax_generate_subobs_for_detections,
+    jax_generate_mbobs_for_detections,
 )
 from deep_field_metadetect.jaxify.jax_metacal import (
     DEFAULT_SHEARS,
@@ -23,6 +23,7 @@ from deep_field_metadetect.jaxify.jax_utils import (
 )
 from deep_field_metadetect.jaxify.observation import (
     dfmd_obs_to_ngmix_obs,
+    jax_get_mb_obs,
 )
 
 
@@ -48,6 +49,7 @@ def jax_single_band_deep_field_metadetect(
     max_objects=jax_dfmd_defaults.MAX_OBJECTS,
     use_sep=False,
     return_debug_info=False,
+    peak_finder_noise=1e-5,
 ):
     """Run deep-field metadetection for a simple scenario of a single band
     with a single image per band using only post-PSF Gaussian weighted moments.
@@ -113,6 +115,9 @@ def jax_single_band_deep_field_metadetect(
         use sep for detection. Otherwise jax peak finder is used.
     return_debug_info: bool
         return detections and mcal_res for debugging
+    peak_finder_noise: float
+        used only when use_sep is False. Sets the noise level for detection.
+        Default: 1e-5.
 
     Returns
     -------
@@ -162,10 +167,9 @@ def jax_single_band_deep_field_metadetect(
     all_detection_results = []
     detections = []
     for shear_idx, shear in enumerate(shears):
-        obs = dfmd_obs_to_ngmix_obs(mcal_res[shear])  # TODO: remove this
-
         if use_sep:
-            detres = run_detection_sep(obs, nodet_flags=nodet_flags)
+            obs = dfmd_obs_to_ngmix_obs(mcal_res[shear])
+            detres = run_detection_sep(obs, nodet_flags=nodet_flags, detect_thresh=3)
             print("num detections : " + str(len(detres["catalog"]["x"])))
 
             ixc = (detres["catalog"]["x"] + 0.5).astype(int)
@@ -177,7 +181,7 @@ def jax_single_band_deep_field_metadetect(
             y_coords = detres["catalog"]["y"]
         else:
             _, detres, _ = detect_galaxies(
-                obs.image, noise=1e-5, max_objects=max_objects
+                mcal_res[shear].image, noise=peak_finder_noise, max_objects=max_objects
             )  # TODO: Noise threshold
             valid_peak_mask = (detres[:, 0] >= 0) & (detres[:, 1] >= 0)
             detres = detres[valid_peak_mask]
@@ -198,6 +202,7 @@ def jax_single_band_deep_field_metadetect(
             _interp_mfrac = jax_compute_mfrac_interp_image(
                 mcal_res[shear].mfrac,
                 mcal_res[shear].wcs.local(),
+                fft_size=fft_size,
             )
 
             mfrac_vals = jax.vmap(lambda x, y: _interp_mfrac.xValue(x, y))(
@@ -214,15 +219,15 @@ def jax_single_band_deep_field_metadetect(
         )
 
         for ind, (obj, subobs) in enumerate(
-            jax_generate_subobs_for_detections(
-                mcal_res[shear],
+            jax_generate_mbobs_for_detections(
+                jax_get_mb_obs(mcal_res[shear]),
                 xs=x_coords,
                 ys=y_coords,
             )
         ):
             # Process single detection and get PyTree result
             single_result = jax_fit_single_detection(
-                mbobs=subobs,
+                mbobs=subobs[0][0],
                 psf_res=psf_res,
                 obj_id=ind + 1,
                 obj_x=obj["x"],

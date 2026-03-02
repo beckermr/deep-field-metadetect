@@ -5,7 +5,11 @@ import jax
 import jax.numpy as jnp
 import jax_galsim
 
-from deep_field_metadetect.jaxify.observation import DFMdetObservation
+from deep_field_metadetect.jaxify.observation import (
+    DFMdetMultiBandObsList,
+    DFMdetObservation,
+    DFMdetObsList,
+)
 
 
 @partial(jax.jit, static_argnames=["window_size"])
@@ -123,7 +127,7 @@ def refine_centroid(
     )
 
     def border_case():
-        return jnp.array([peak[0], peak[1]]).astype(float)
+        return jnp.array([peak[0], peak[1]], dtype=jnp.float_)
 
     def normal_case():
         window = jax.lax.dynamic_slice(
@@ -146,7 +150,7 @@ def refine_centroid(
         refined_y = y_shift + peak[0]
         refined_x = x_shift + peak[1]
 
-        return jnp.array([refined_y, refined_x])
+        return jnp.array([refined_y, refined_x], dtype=jnp.float_)
 
     result = jax.lax.cond(near_border, border_case, normal_case)
 
@@ -516,7 +520,6 @@ def _get_subobs_jax(
     orig_y_box, sub_y_box = _get_subboxes(start_y, end_y, box_size, max_y)
 
     # Create new WCS with adjusted origin
-    # new_wcs = obs.wcs.withOrigin(
     new_wcs = jax_galsim.wcs.AffineTransform(
         dudx=obs.wcs.dudx,
         dudy=obs.wcs.dudy,
@@ -654,4 +657,68 @@ def jax_generate_subobs_for_detections(
                 "y": y,
             },
             sub_obs,
+        )
+
+
+def jax_generate_mbobs_for_detections(
+    mbobs,
+    xs,
+    ys,
+    box_size=48,
+    ids=None,
+):
+    """Generate sub-mbobs around given positions for JAX multi-band observations.
+
+    This routine is a generator and so should be used like thus:
+
+    This is the non-JIT (because of yield) compatible generator version and is the
+    JAX equivalent of ``generate_mbobs_for_detections`` in ``detect.py``.
+
+    Parameters
+    ----------
+    mbobs : DFMdetMultiBandObsList
+        The multi-band observations to generate sub-mbobs from.
+        Must be already converted using jax_get_mb_obs().
+    xs : array-like
+        The x positions of the objects.
+    ys : array-like
+        The y positions of the objects.
+    box_size : int, optional
+        The size of the sub-boxes around the objects. Default is 48.
+    ids : array-like, optional
+        The IDs of the objects. If None, the IDs are the indices of the positions.
+
+    Returns
+    -------
+    generator
+        A generator that yields a tuple of the object information and the
+        sub-mbobs (DFMdetMultiBandObsList).
+    """
+    half_box_size = box_size // 2
+
+    for i, (x, y) in enumerate(zip(xs, ys)):
+        ix = int(x)
+        iy = int(y)
+        start_x = ix - half_box_size + 1
+        start_y = iy - half_box_size + 1
+        end_x = ix + half_box_size + 1  # plus one for slices
+        end_y = iy + half_box_size + 1
+
+        sub_obs_lists = []
+        for obslist in mbobs:
+            sub_obs_list = DFMdetObsList(
+                [
+                    _get_subobs_jax(obs, x, y, start_x, start_y, end_x, end_y, box_size)
+                    for obs in obslist
+                ]
+            )
+            sub_obs_lists.append(sub_obs_list)
+
+        yield (
+            {
+                "id": ids[i] if ids is not None else i,
+                "x": x,
+                "y": y,
+            },
+            DFMdetMultiBandObsList(sub_obs_lists),
         )
