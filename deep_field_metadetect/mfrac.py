@@ -24,7 +24,7 @@ def compute_mfrac_interp_image(mfrac, wcs, fwhm=1.2):
         normalization="sb",
     )
     _gsimage = galsim.Convolve(_gsimage_interp, galsim.Gaussian(fwhm=fwhm))
-    _gsimage = _gsimage_interp.drawImage(
+    _gsimage = _gsimage.drawImage(
         image=_gsimage_orig.copy(),
         method="sb",
     )
