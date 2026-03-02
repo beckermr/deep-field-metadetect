@@ -410,7 +410,7 @@ def _create_test_dfmd_obs(
                 (5, 5),
                 minval=0.8,
                 maxval=1.2,
-            ).astype(jnp.float32),
+            ),
             wcs=wcs,
         )
         if has_psf
