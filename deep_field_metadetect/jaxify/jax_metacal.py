@@ -4,7 +4,6 @@ import galsim as galsim
 import jax
 import jax.numpy as jnp
 import jax_galsim
-import numpy as np
 
 from deep_field_metadetect.jaxify import jax_dfmd_defaults
 from deep_field_metadetect.jaxify.observation import (
@@ -186,7 +185,7 @@ def _jax_render_psf_and_build_obs(
             x=dfmd_obs.psf.wcs.origin.x - (nxy_psf + 1) / 2,
             y=dfmd_obs.psf.wcs.origin.y - (nxy_psf + 1) / 2,
         ),
-    ).array
+    ).array.astype(jnp.float_)
 
     obs_psf = dfmd_obs.psf.replace(image=pim)
     return dfmd_obs.replace(
@@ -230,14 +229,14 @@ def _jax_metacal_op_g1g2_impl(
         minimum_fft_size=fft_size,
         maximum_fft_size=fft_size,
     )
-    ims = ims.drawImage(nx=dims[1], ny=dims[0], wcs=wcs).array
+    ims = ims.drawImage(nx=dims[1], ny=dims[0], wcs=wcs).array.astype(jnp.float_)
 
     ns = ns.withGSParams(
         minimum_fft_size=fft_size,
         maximum_fft_size=fft_size,
     )
     ns = jnp.rot90(
-        ns.drawImage(nx=dims[1], ny=dims[0], wcs=wcs).array,
+        ns.drawImage(nx=dims[1], ny=dims[0], wcs=wcs).array.astype(jnp.float_),
         k=-1,
     )
     return ims + ns
@@ -451,7 +450,7 @@ def jax_match_psf(
         minimum_fft_size=fft_size,
         maximum_fft_size=fft_size,
     )
-    ims = ims.drawImage(nx=nxy, ny=nxy, wcs=wcs).array
+    ims = ims.drawImage(nx=nxy, ny=nxy, wcs=wcs).array.astype(jnp.float_)
 
     if return_k_info:
         return _jax_render_psf_and_build_obs(
@@ -461,13 +460,6 @@ def jax_match_psf(
         return _jax_render_psf_and_build_obs(
             ims, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1
         )
-
-
-def _extract_attr(obs, attr, dtype=np.float32):
-    if getattr(obs, "has_" + attr)():
-        return getattr(obs, attr)
-    else:
-        return np.zeros_like(obs.image, dtype=dtype)
 
 
 def jax_add_dfmd_psf(psf1, psf2):
@@ -543,7 +535,7 @@ def jax_add_dfmd_obs(
         from deep_field_metadetect.jaxify.observation import DFMdetPSF
 
         return DFMdetPSF(
-            image=jnp.zeros_like(dfmd_obs1.psf.image, dtype=jnp.float32),
+            image=jnp.zeros_like(dfmd_obs1.psf.image, dtype=jnp.float_),
             wcs=dfmd_obs1.psf.wcs,
             meta=dfmd_obs1.psf.meta,
             store_pixels=dfmd_obs1.psf.store_pixels,

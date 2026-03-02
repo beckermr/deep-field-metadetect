@@ -191,11 +191,11 @@ def jax_fit_single_detection(
     # Return PyTree with scalar values
     return {
         "id": jnp.array(obj_id, dtype=jnp.int64),
-        "x": jnp.array(obj_x, dtype=jnp.float64),
-        "y": jnp.array(obj_y, dtype=jnp.float64),
+        "x": jnp.array(obj_x, dtype=jnp.float_),
+        "y": jnp.array(obj_y, dtype=jnp.float_),
         "mdet_step_idx": jnp.array(shear_idx, dtype=jnp.int32),
         "bmask_flags": jnp.array(bmask_flag, dtype=jnp.int32),
-        "mfrac": jnp.array(mfrac_val, dtype=jnp.float32),
+        "mfrac": jnp.array(mfrac_val, dtype=jnp.float_),
         "wmom_flags": fres["wmom_flags"],
         "wmom_g1": fres["wmom_g1"],
         "wmom_g2": fres["wmom_g2"],
@@ -223,11 +223,11 @@ def stack_detection_results(results_list):
         # Return empty arrays if no detections
         return {
             "id": jnp.array([], dtype=jnp.int64),
-            "x": jnp.array([], dtype=jnp.float64),
-            "y": jnp.array([], dtype=jnp.float64),
+            "x": jnp.array([], dtype=jnp.float_),
+            "y": jnp.array([], dtype=jnp.float_),
             "mdet_step_idx": jnp.array([], dtype=jnp.int32),
             "bmask_flags": jnp.array([], dtype=jnp.int32),
-            "mfrac": jnp.array([], dtype=jnp.float32),
+            "mfrac": jnp.array([], dtype=jnp.float_),
             "wmom_flags": jnp.array([], dtype=jnp.int32),
             "wmom_g1": jnp.array([], dtype=jnp.float64),
             "wmom_g2": jnp.array([], dtype=jnp.float64),
