@@ -350,3 +350,169 @@ def dfmd_obs_to_ngmix_obs(dfmd_obs: DFMdetObservation) -> Observation:
         store_pixels=np.array(dfmd_obs.store_pixels, dtype=np.bool_),
         ignore_zero_weight=np.array(dfmd_obs.ignore_zero_weight, dtype=np.bool_),
     )
+
+
+@jax.tree_util.register_pytree_node_class
+class DFMdetObsList:
+    """JAX-compatible observation list for Deep Field Metadetect.
+
+    Similar to ngmix.ObsList but designed for JAX compatibility.
+    This class is immutable and JIT-compatible with fixed size.
+
+    Parameters
+    ----------
+    obs_list : tuple or list of DFMdetObservation, optional
+        The observations to store. Must be provided at construction.
+    meta : dict, optional
+        Metadata dictionary.
+    """
+
+    def __init__(self, obs_list=None, meta=None):
+        if obs_list is None:
+            self._obs_list = ()
+        else:
+            # Store as immutable tuple for JIT compatibility
+            self._obs_list = tuple(obs_list)
+
+        self.meta = meta if meta is not None else {}
+
+    def set(self, index, obs):
+        """Create a new DFMdetObsList with an observation replaced at index.
+
+        This is a functional operation that returns a new instance with the same size.
+
+        Parameters
+        ----------
+        index : int
+            Index of the observation to replace.
+        obs : DFMdetObservation
+            The new observation.
+
+        Returns
+        -------
+        DFMdetObsList
+            New instance with the observation replaced.
+        """
+        if not isinstance(obs, DFMdetObservation):
+            raise TypeError("Can only set DFMdetObservation objects")
+        new_list = list(self._obs_list)
+        new_list[index] = obs
+        return DFMdetObsList(tuple(new_list), self.meta)
+
+    def __len__(self):
+        return len(self._obs_list)
+
+    def __getitem__(self, index):
+        return self._obs_list[index]
+
+    def __setitem__(self, index, obs):
+        raise NotImplementedError(
+            "DFMdetObsList is immutable. Use .set(index, obs) instead."
+        )
+
+    def __iter__(self):
+        return iter(self._obs_list)
+
+    def tree_flatten(self):
+        return self._obs_list, self.meta
+
+    @classmethod
+    def tree_unflatten(cls, meta, obs_list):
+        return cls(obs_list, meta)
+
+
+@jax.tree_util.register_pytree_node_class
+class DFMdetMultiBandObsList:
+    """JAX-compatible multi-band observation list for Deep Field Metadetect.
+
+    Similar to ngmix.MultiBandObsList but designed for JAX compatibility.
+    This class is immutable and JIT-compatible with fixed size.
+
+    Parameters
+    ----------
+    mb_obs_list : tuple or list of DFMdetObsList, optional
+        The observation lists for each band. Must be provided at construction.
+    meta : dict, optional
+        Metadata dictionary.
+    """
+
+    def __init__(self, mb_obs_list=None, meta=None):
+        if mb_obs_list is None:
+            self._mb_obs_list = ()
+        else:
+            # Store as immutable tuple for JIT compatibility
+            self._mb_obs_list = tuple(mb_obs_list)
+        self.meta = meta if meta is not None else {}
+
+    def set(self, index, obs_list):
+        """Create a new DFMdetMultiBandObsList with an obs list replaced at index.
+
+        This is a functional operation that returns a new instance with the same size.
+
+        Parameters
+        ----------
+        index : int
+            Index of the band to replace.
+        obs_list : DFMdetObsList
+            The new observation list for this band.
+
+        Returns
+        -------
+        DFMdetMultiBandObsList
+            New instance with the observation list replaced.
+        """
+        if not isinstance(obs_list, DFMdetObsList):
+            raise TypeError("Can only set DFMdetObsList objects")
+        new_list = list(self._mb_obs_list)
+        new_list[index] = obs_list
+        return DFMdetMultiBandObsList(tuple(new_list), self.meta)
+
+    def __len__(self):
+        return len(self._mb_obs_list)
+
+    def __getitem__(self, index):
+        return self._mb_obs_list[index]
+
+    def __setitem__(self, index, obs_list):
+        raise NotImplementedError(
+            "DFMdetMultiBandObsList is immutable. Use .set(index, obs_list) instead."
+        )
+
+    def __iter__(self):
+        return iter(self._mb_obs_list)
+
+    def tree_flatten(self):
+        return self._mb_obs_list, self.meta
+
+    @classmethod
+    def tree_unflatten(cls, meta, mb_obs_list):
+        return cls(mb_obs_list, meta)
+
+
+def jax_get_mb_obs(obs_in):
+    """Convert input to a DFMdetMultiBandObsList.
+
+    JAX equivalent of ngmix.observation.get_mb_obs.
+
+    Parameters
+    ----------
+    obs_in : DFMdetObservation, DFMdetObsList, or DFMdetMultiBandObsList
+        Input data to convert to a DFMdetMultiBandObsList.
+
+    Returns
+    -------
+    mbobs : DFMdetMultiBandObsList
+        A DFMdetMultiBandObsList containing the input data.
+    """
+    if isinstance(obs_in, DFMdetObservation):
+        obs_list = DFMdetObsList([obs_in])
+        obs = DFMdetMultiBandObsList([obs_list])
+    elif isinstance(obs_in, DFMdetObsList):
+        obs = DFMdetMultiBandObsList([obs_in])
+    elif isinstance(obs_in, DFMdetMultiBandObsList):
+        obs = obs_in
+    else:
+        raise ValueError(
+            "obs should be DFMdetObservation, DFMdetObsList, or DFMdetMultiBandObsList"
+        )
+    return obs
