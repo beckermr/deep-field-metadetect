@@ -102,7 +102,6 @@ class DFMdetObservation:
         store_pixels=True,
         ignore_zero_weight=True,
     ):
-        image = image.astype(float)
         if weight is None:
             weight = jnp.ones_like(image)
         if bmask is None:
