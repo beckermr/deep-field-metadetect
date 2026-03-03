@@ -29,6 +29,7 @@ def single_band_deep_field_metadetect(
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
     fft_size=None,
+    return_debug_info=False,
 ):
     """Run deep-field metadetection for a simple scenario of a single band
     with a single image per band using only post-PSF Gaussian weighted moments.
@@ -113,13 +114,15 @@ def single_band_deep_field_metadetect(
 
     psf_res = fit_gauss_mom_obs(mcal_res["noshear"].psf)
     dfmdet_res = []
+    detections = []
     for shear in shears:
         obs = mcal_res[shear]
         detres = run_detection_sep(obs, nodet_flags=nodet_flags)
-
+        print("num detections : " + str(len(detres["catalog"]["x"])))
         ixc = (detres["catalog"]["x"] + 0.5).astype(int)
         iyc = (detres["catalog"]["y"] + 0.5).astype(int)
         bmask_flags = obs.bmask[iyc, ixc]
+        detections.append(detres["catalog"])
 
         mfrac_vals = np.zeros_like(bmask_flags, dtype="f4")
         if np.any(obs.mfrac > 0):
@@ -144,6 +147,7 @@ def single_band_deep_field_metadetect(
                 (ind + 1, obj["x"], obj["y"], shear, bmask_flags[ind], mfrac_vals[ind])
                 + tuple(fres[0])
             )
+            print(str(ind) + "non-jax tuple:" + str(tuple(fres[0])))
 
     total_dtype = [
         ("id", "i8"),
@@ -153,6 +157,16 @@ def single_band_deep_field_metadetect(
         ("bmask_flags", "i4"),
         ("mfrac", "f4"),
     ] + fres.dtype.descr
+
+    if return_debug_info:
+        if return_k_info:
+            return (
+                (np.array(dfmdet_res, dtype=total_dtype), kinfo),
+                mcal_res,
+                detections,
+            )
+
+        return np.array(dfmdet_res, dtype=total_dtype), mcal_res, detections
 
     if return_k_info:
         return (np.array(dfmdet_res, dtype=total_dtype), kinfo)

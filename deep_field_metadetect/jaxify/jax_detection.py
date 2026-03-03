@@ -3,6 +3,13 @@ from typing import Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import jax_galsim
+
+from deep_field_metadetect.jaxify.observation import (
+    DFMdetMultiBandObsList,
+    DFMdetObservation,
+    DFMdetObsList,
+)
 
 
 @partial(jax.jit, static_argnames=["window_size"])
@@ -36,7 +43,7 @@ def local_maxima_filter(
         image, -jnp.inf, jax.lax.max, (window_size, window_size), (1, 1), "SAME"
     )
 
-    threshold_mask = image > 3 * noise_array
+    threshold_mask = image > jnp.abs(3 * noise_array)
     local_max_mask = (image == max_pooled) & threshold_mask
 
     return local_max_mask
@@ -120,7 +127,7 @@ def refine_centroid(
     )
 
     def border_case():
-        return jnp.array([peak[0], peak[1]]).astype(float)
+        return jnp.array([peak[0], peak[1]], dtype=jnp.float_)
 
     def normal_case():
         window = jax.lax.dynamic_slice(
@@ -143,7 +150,7 @@ def refine_centroid(
         refined_y = y_shift + peak[0]
         refined_x = x_shift + peak[1]
 
-        return jnp.array([refined_y, refined_x])
+        return jnp.array([refined_y, refined_x], dtype=jnp.float_)
 
     result = jax.lax.cond(near_border, border_case, normal_case)
 
@@ -428,3 +435,290 @@ def watershed_from_peaks(
     )
 
     return watershed_labels
+
+
+# Constants for JAX detection functions
+BMASK_EDGE = 2**30
+DEFAULT_IMAGE_VALUES = {
+    "image": 0.0,
+    "weight": 0.0,
+    "seg": 0,
+    "bmask": BMASK_EDGE,
+    "noise": 0.0,
+    "mfrac": 0.0,
+}
+
+
+def _get_subboxes(
+    start: int, end: int, box_size: int, max_size: int
+) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    """Calculate subboxes for extracting sub-images with proper boundary handling.
+
+    Parameters
+    ----------
+    start : int
+        Start coordinate of the box.
+    end : int
+        End coordinate of the box.
+    box_size : int
+        Size of the target box.
+    max_size : int
+        Maximum size of the source image.
+
+    Returns
+    -------
+    tuple
+        Tuple of (orig_box, sub_box) where each is (start, end) coordinates.
+    """
+    assert end - start == box_size
+    orig_box = [start, end]
+    sub_box = [0, box_size]
+
+    if start < 0:
+        sub_box[0] = -start
+        orig_box[0] = 0
+    if end > max_size:
+        sub_box[1] = box_size - (end - max_size)
+        orig_box[1] = max_size
+
+    return (orig_box[0], orig_box[1]), (sub_box[0], sub_box[1])
+
+
+def _get_subobs_jax(
+    obs,
+    x: float,
+    y: float,
+    start_x: int,
+    start_y: int,
+    end_x: int,
+    end_y: int,
+    box_size: int,
+):
+    """Create a sub-observation around a given position using JAX arrays.
+
+    Parameters
+    ----------
+    obs : DFMdetObservation
+        The source observation.
+    x, y : float
+        The object position coordinates.
+    start_x, start_y : int
+        Start coordinates for the sub-box.
+    end_x, end_y : int
+        End coordinates for the sub-box.
+    box_size : int
+        Size of the target sub-box.
+
+    Returns
+    -------
+    DFMdetObservation
+        Sub-observation around the given position.
+    """
+
+    max_y, max_x = obs.image.shape
+    orig_x_box, sub_x_box = _get_subboxes(start_x, end_x, box_size, max_x)
+    orig_y_box, sub_y_box = _get_subboxes(start_y, end_y, box_size, max_y)
+
+    # Create new WCS with adjusted origin
+    new_wcs = jax_galsim.wcs.AffineTransform(
+        dudx=obs.wcs.dudx,
+        dudy=obs.wcs.dudy,
+        dvdx=obs.wcs.dvdx,
+        dvdy=obs.wcs.dvdy,
+        origin=jax_galsim.PositionD(
+            x=(x - start_x) + 1,
+            y=(y - start_y) + 1,
+        ),
+    )
+
+    kwargs = {"wcs": new_wcs}
+
+    if obs.has_psf():
+        kwargs["psf"] = obs.psf
+
+    for key in ["image", "bmask", "noise", "mfrac", "weight"]:
+        subim = None
+
+        if key == "image":
+            subim = jnp.full(
+                (box_size, box_size), DEFAULT_IMAGE_VALUES[key], dtype=obs.image.dtype
+            )
+            subim = subim.at[
+                sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]
+            ].set(
+                obs.image[orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]]
+            )
+        elif key == "bmask":
+            if obs.has_bmask():
+                subim = jnp.full(
+                    (box_size, box_size),
+                    DEFAULT_IMAGE_VALUES[key],
+                    dtype=obs.bmask.dtype,
+                )
+                subim = subim.at[
+                    sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]
+                ].set(
+                    obs.bmask[
+                        orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]
+                    ]
+                )
+            else:
+                subim = jnp.full(
+                    (box_size, box_size), DEFAULT_IMAGE_VALUES[key], dtype=jnp.int32
+                )
+                subim = subim.at[
+                    sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]
+                ].set(0)
+        elif key == "noise" and obs.has_noise():
+            subim = jnp.full(
+                (box_size, box_size), DEFAULT_IMAGE_VALUES[key], dtype=obs.noise.dtype
+            )
+            subim = subim.at[
+                sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]
+            ].set(
+                obs.noise[orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]]
+            )
+        elif key == "weight":
+            subim = jnp.full(
+                (box_size, box_size), DEFAULT_IMAGE_VALUES[key], dtype=obs.weight.dtype
+            )
+            subim = subim.at[
+                sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]
+            ].set(
+                obs.weight[orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]]
+            )
+        elif key == "mfrac" and obs.has_mfrac():
+            subim = jnp.full(
+                (box_size, box_size), DEFAULT_IMAGE_VALUES[key], dtype=obs.mfrac.dtype
+            )
+            subim = subim.at[
+                sub_y_box[0] : sub_y_box[1], sub_x_box[0] : sub_x_box[1]
+            ].set(
+                obs.mfrac[orig_y_box[0] : orig_y_box[1], orig_x_box[0] : orig_x_box[1]]
+            )
+
+        if subim is not None:
+            kwargs[key] = subim
+
+    if "mfrac" in kwargs and "bmask" in kwargs:
+        msk = kwargs["bmask"] & BMASK_EDGE != 0
+        kwargs["mfrac"] = jnp.where(msk, 1.0, kwargs["mfrac"])
+
+    return DFMdetObservation(**kwargs)
+
+
+def jax_generate_subobs_for_detections(
+    obs,
+    xs,
+    ys,
+    box_size=48,
+    ids=None,
+):
+    """Generate sub-observations around given positions for a single observation.
+
+    This is the non-JIT compatible generator version.
+
+    Parameters
+    ----------
+    obs : DFMdetObservation
+        The observation to generate sub-observations from.
+    xs : array-like
+        The x positions of the objects.
+    ys : array-like
+        The y positions of the objects.
+    box_size : int, optional
+        The size of the sub-boxes around the objects. Default is 48.
+    ids : array-like, optional
+        The IDs of the objects. If None, the IDs are the indices of the positions.
+
+    Returns
+    -------
+    generator
+        A generator that yields a tuple of the object information and the
+        sub-observation.
+    """
+    half_box_size = box_size // 2
+
+    for i, (x, y) in enumerate(zip(xs, ys)):
+        ix = int(x)
+        iy = int(y)
+        start_x = ix - half_box_size + 1
+        start_y = iy - half_box_size + 1
+        end_x = ix + half_box_size + 1  # plus one for slices
+        end_y = iy + half_box_size + 1
+
+        # Create sub-observation for this detection
+        sub_obs = _get_subobs_jax(obs, x, y, start_x, start_y, end_x, end_y, box_size)
+
+        yield (
+            {
+                "id": ids[i] if ids is not None else i,
+                "x": x,
+                "y": y,
+            },
+            sub_obs,
+        )
+
+
+def jax_generate_mbobs_for_detections(
+    mbobs,
+    xs,
+    ys,
+    box_size=48,
+    ids=None,
+):
+    """Generate sub-mbobs around given positions for JAX multi-band observations.
+
+    This routine is a generator and so should be used like thus:
+
+    This is the non-JIT (because of yield) compatible generator version and is the
+    JAX equivalent of ``generate_mbobs_for_detections`` in ``detect.py``.
+
+    Parameters
+    ----------
+    mbobs : DFMdetMultiBandObsList
+        The multi-band observations to generate sub-mbobs from.
+        Must be already converted using jax_get_mb_obs().
+    xs : array-like
+        The x positions of the objects.
+    ys : array-like
+        The y positions of the objects.
+    box_size : int, optional
+        The size of the sub-boxes around the objects. Default is 48.
+    ids : array-like, optional
+        The IDs of the objects. If None, the IDs are the indices of the positions.
+
+    Returns
+    -------
+    generator
+        A generator that yields a tuple of the object information and the
+        sub-mbobs (DFMdetMultiBandObsList).
+    """
+    half_box_size = box_size // 2
+
+    for i, (x, y) in enumerate(zip(xs, ys)):
+        ix = int(x)
+        iy = int(y)
+        start_x = ix - half_box_size + 1
+        start_y = iy - half_box_size + 1
+        end_x = ix + half_box_size + 1  # plus one for slices
+        end_y = iy + half_box_size + 1
+
+        sub_obs_lists = []
+        for obslist in mbobs:
+            sub_obs_list = DFMdetObsList(
+                [
+                    _get_subobs_jax(obs, x, y, start_x, start_y, end_x, end_y, box_size)
+                    for obs in obslist
+                ]
+            )
+            sub_obs_lists.append(sub_obs_list)
+
+        yield (
+            {
+                "id": ids[i] if ids is not None else i,
+                "x": x,
+                "y": y,
+            },
+            DFMdetMultiBandObsList(sub_obs_lists),
+        )

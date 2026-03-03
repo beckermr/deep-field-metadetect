@@ -1,10 +1,6 @@
-from dataclasses import dataclass
-
 import jax
 import jax.numpy as jnp
 import ngmix
-import numpy as np
-from jax import tree_util
 from ngmix.moments import MOMENTS_NAME_MAP
 
 from deep_field_metadetect.gaussmom.gaussmom_core import (
@@ -303,7 +299,7 @@ def _compute_shape_params(
 @jax.jit
 def get_weighted_moments_stats(
     gaussmom_obs: GaussMomObs, sums, sums_cov, npix, sums_norm=None
-):
+) -> GaussMomData:
     """Make a fitting results dict from a set of unnormalized moments.
 
     Note this function does not check shapes of sums and sums_cov
@@ -422,7 +418,6 @@ def get_weighted_moments_stats(
     return res
 
 
-@jax.jit
 def _add_moments_by_name(res):
     updates = {}
     mf_ind = MOMENTS_NAME_MAP["MF"]
@@ -471,7 +466,6 @@ def _add_moments_by_name(res):
     return res
 
 
-@jax.jit
 def get_ratio_error(a, b, var_a, var_b, cov_ab):
     """
     Compute the error on the ratio a / b using JAX.
@@ -483,10 +477,11 @@ def get_ratio_error(a, b, var_a, var_b, cov_ab):
     return error
 
 
-@dataclass
+@jax.tree_util.register_pytree_node_class
 class GaussMom:
-    fwhm: float
-    with_higher_order: bool = False
+    def __init__(self, fwhm: float, with_higher_order: bool = False):
+        self.fwhm = fwhm
+        self.with_higher_order = with_higher_order
 
     def _set_mompars(self, gaussmom_obs: GaussMomObs):
         T = _fwhm_to_T(self.fwhm)
@@ -496,27 +491,37 @@ class GaussMom:
             mompars, gaussmom_obs.u, gaussmom_obs.v, gaussmom_obs.area
         )
 
-        self.weight = wt_noimage / wt_norm
+        return wt_noimage / wt_norm
 
-    def go(self, gaussmom_obs, maxrad=None, with_higher_order: bool = False):
-        if maxrad is None:
+    @jax.jit
+    def go(self, gaussmom_obs, maxrad=0.0) -> GaussMomData:
+        def compute_maxrad(_):
             T = _fwhm_to_T(fwhm=self.fwhm)
-            sigma = np.sqrt(T / 2)
-            maxrad = 100 * sigma
+            sigma = jnp.sqrt(T / 2)
+            return 100 * sigma
+
+        def use_maxrad(_):
+            return maxrad
+
+        maxrad = jax.lax.cond(
+            maxrad == 0,
+            compute_maxrad,
+            use_maxrad,
+            operand=None,
+        )
+
         res = self._measure_moments(
             gaussmom_obs=gaussmom_obs,
             maxrad=maxrad,
-            with_higher_order=with_higher_order,
         )
         return res
 
     def _measure_moments(
-        self, gaussmom_obs: GaussMomObs, maxrad: float, with_higher_order: bool = False
-    ):
+        self, gaussmom_obs: GaussMomObs, maxrad: float
+    ) -> GaussMomData:
         res = self.get_weighted_moments(
             gaussmom_obs=gaussmom_obs,
             maxrad=maxrad,
-            with_higher_order=with_higher_order,
         )
 
         area = gaussmom_obs.area
@@ -536,8 +541,8 @@ class GaussMom:
         return res
 
     def get_weighted_moments(
-        self, gaussmom_obs: GaussMomObs, maxrad: float, with_higher_order: bool = False
-    ):
+        self, gaussmom_obs: GaussMomObs, maxrad: float
+    ) -> GaussMomData:
         """
         Get weighted moments using this mixture as the weight, including
         e1,e2,T,s2n etc.  If you just want the raw moments use
@@ -552,9 +557,6 @@ class GaussMom:
             see deepfield_meta_detect.gaussmom.GaussMomObs
         maxrad: float, optional
             If sent, limit moments to within the specified maximum radius
-        with_higher_order: bool, optional
-            If set to True, return higher order moments in the sums/sums_cov
-            arrays.  [Yet to be implemented]
 
         Returns
         -------
@@ -562,7 +564,7 @@ class GaussMom:
             results
         """
 
-        if with_higher_order:
+        if self.with_higher_order:
             raise ValueError("Not yet implimented")
 
         sums, sums_cov, wsum, npix = self.get_weighted_sums(
@@ -577,7 +579,6 @@ class GaussMom:
             sums_norm=wsum,
         )
 
-    @jax.jit
     def get_weighted_sums(self, gaussmom_obs, maxrad):
         """
         Compute weighted moment sums and their covariance for a 2D Gaussian model.
@@ -618,8 +619,8 @@ class GaussMom:
 
         circle_mask = jnp.where(jnp.sqrt(rad2) <= maxrad, 1, 0)
 
-        self._set_mompars(gaussmom_obs=gaussmom_obs)
-        wt_noimage = circle_mask * self.weight
+        weight = self._set_mompars(gaussmom_obs=gaussmom_obs)
+        wt_noimage = circle_mask * weight
 
         wdata = wt_noimage * gaussmom_obs.image
 
@@ -650,16 +651,13 @@ class GaussMom:
         return sums, sums_cov, wsum, npix
 
     def tree_flatten(self):
-        children = (self.fwhm, self.with_higher_order)
-        aux_data = {}
+        children = (self.fwhm,)
+        aux_data = {"with_higher_order": self.with_higher_order}
         return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        fwhm, with_higher_order = children
-        obj = cls(fwhm=fwhm, with_higher_order=with_higher_order)
+        (fwhm,) = children
+        obj = cls(fwhm=fwhm, with_higher_order=aux_data["with_higher_order"])
 
         return obj
-
-
-tree_util.register_pytree_node_class(GaussMom)
