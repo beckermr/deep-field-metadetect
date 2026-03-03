@@ -22,13 +22,13 @@ repos:
         args:
           - --py36-plus
   - repo: https://github.com/pycqa/isort
-    rev: 7.0.0
+    rev: 8.0.1
     hooks:
       - id: isort
         name: isort (python)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.14.10
+    rev: v0.15.4
     hooks:
       - id: ruff
         args: [ --fix ]
