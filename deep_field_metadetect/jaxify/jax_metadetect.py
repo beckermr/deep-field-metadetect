@@ -47,9 +47,11 @@ def jax_single_band_deep_field_metadetect(
     reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
     reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
     max_objects=jax_dfmd_defaults.MAX_OBJECTS,
+    moment_stamp_size=48,
     use_sep=False,
     return_debug_info=False,
     peak_finder_noise=1e-5,
+    debug_verbose=False,
 ):
     """Run deep-field metadetection for a simple scenario of a single band
     with a single image per band using only post-PSF Gaussian weighted moments.
@@ -111,6 +113,11 @@ def jax_single_band_deep_field_metadetect(
         Default: jax_defaults.DEFAULT_KIM_SIZE
     max_objects: int
         Max number of objects in a field
+    moment_stamp_size: int, optional
+        The size of the stamp (box_size) used for moment measurements.
+        This determines the padding width (moment_stamp_size // 2) applied
+        to observations before extracting sub-observations.
+        Default: 48.
     use_sep: bool
         use sep for detection. Otherwise jax peak finder is used.
     return_debug_info: bool
@@ -158,7 +165,7 @@ def jax_single_band_deep_field_metadetect(
         fft_size=fft_size,
         reconv_psf_dk=reconv_psf_dk,
         reconv_psf_kim_size=reconv_psf_kim_size,
-    )  # This returns ngmix Obs for now
+    )
 
     if return_k_info:
         mcal_res, kinfo = mcal_res
@@ -170,7 +177,8 @@ def jax_single_band_deep_field_metadetect(
         if use_sep:
             obs = dfmd_obs_to_ngmix_obs(mcal_res[shear])
             detres = run_detection_sep(obs, nodet_flags=nodet_flags, detect_thresh=3)
-            print("num detections : " + str(len(detres["catalog"]["x"])))
+            if debug_verbose:
+                print("num detections : " + str(len(detres["catalog"]["x"])))
 
             ixc = (detres["catalog"]["x"] + 0.5).astype(int)
             iyc = (detres["catalog"]["y"] + 0.5).astype(int)
@@ -185,8 +193,8 @@ def jax_single_band_deep_field_metadetect(
             )  # TODO: Noise threshold
             valid_peak_mask = (detres[:, 0] >= 0) & (detres[:, 1] >= 0)
             detres = detres[valid_peak_mask]
-
-            print("Num detections " + str(len(detres)))
+            if debug_verbose:
+                print("Num detections " + str(len(detres)))
 
             # Extract coordinates
             x_coords = detres[:, 0]  # TODO: check if invalid peaks handled well
@@ -218,11 +226,17 @@ def jax_single_band_deep_field_metadetect(
             jnp.any(mcal_res[shear].mfrac > 0), get_mfrac_values, get_zero_mfrac
         )
 
+        # Pad observations once before extracting sub-observations
+        # pad_width is half of moment_stamp_size
+        pad_width = moment_stamp_size // 2
+        padded_mbobs = jax_get_mb_obs(mcal_res[shear], pad_width=pad_width)
+
         for ind, (obj, subobs) in enumerate(
             jax_generate_mbobs_for_detections(
-                jax_get_mb_obs(mcal_res[shear]),
-                xs=x_coords,
-                ys=y_coords,
+                padded_mbobs,
+                xs=x_coords + pad_width,  # New location after padding
+                ys=y_coords + pad_width,
+                box_size=moment_stamp_size,
             )
         ):
             # Process single detection and get PyTree result
@@ -230,8 +244,8 @@ def jax_single_band_deep_field_metadetect(
                 mbobs=subobs[0][0],
                 psf_res=psf_res,
                 obj_id=ind + 1,
-                obj_x=obj["x"],
-                obj_y=obj["y"],
+                obj_x=obj["x"] - pad_width,  # location in original img
+                obj_y=obj["y"] - pad_width,
                 shear_idx=shear_idx,
                 bmask_flag=bmask_flags[ind],
                 mfrac_val=mfrac_vals[ind],

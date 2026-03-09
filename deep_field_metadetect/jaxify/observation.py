@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 import jax_galsim
@@ -488,7 +490,106 @@ class DFMdetMultiBandObsList:
         return cls(mb_obs_list, meta)
 
 
-def jax_get_mb_obs(obs_in):
+# Constants for padding
+BMASK_EDGE = 2**30
+DEFAULT_IMAGE_VALUES = {
+    "image": 0.0,
+    "weight": 0.0,
+    "bmask": BMASK_EDGE,
+    "noise": 0.0,
+    "mfrac": 0.0,
+}
+
+
+@partial(jax.jit, static_argnames=["pad_width"])
+def pad_observation(obs: DFMdetObservation, pad_width: int) -> DFMdetObservation:
+    """Pad observation arrays with appropriate default values.
+
+    This function pads all image arrays in the observation with a fixed width
+    on all sides, using appropriate default values for regions outside the
+    original image bounds. The WCS is updated to account for the padding offset.
+
+    Parameters
+    ----------
+    obs : DFMdetObservation
+        The observation to pad.
+    pad_width : int
+        Number of pixels to pad on all sides.
+
+    Returns
+    -------
+    DFMdetObservation
+        New observation with padded arrays and adjusted WCS.
+    """
+    # Pad each array with appropriate default values
+    padded_image = jnp.pad(
+        obs.image,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=DEFAULT_IMAGE_VALUES["image"],
+    )
+
+    padded_weight = jnp.pad(
+        obs.weight,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=DEFAULT_IMAGE_VALUES["weight"],
+    )
+
+    padded_bmask = jnp.pad(
+        obs.bmask,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=DEFAULT_IMAGE_VALUES["bmask"],
+    )
+
+    padded_ormask = jnp.pad(
+        obs.ormask, pad_width=pad_width, mode="constant", constant_values=0
+    )
+
+    padded_noise = jnp.pad(
+        obs.noise,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=DEFAULT_IMAGE_VALUES["noise"],
+    )
+
+    padded_mfrac = jnp.pad(
+        obs.mfrac,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=DEFAULT_IMAGE_VALUES["mfrac"],
+    )
+
+    # Update WCS origin to account for padding
+    # The origin shifts by pad_width pixels in both x and y
+    new_wcs = jax_galsim.wcs.AffineTransform(
+        dudx=obs.wcs.dudx,
+        dudy=obs.wcs.dudy,
+        dvdx=obs.wcs.dvdx,
+        dvdy=obs.wcs.dvdy,
+        origin=jax_galsim.PositionD(
+            x=obs.wcs.origin.x + pad_width,
+            y=obs.wcs.origin.y + pad_width,
+        ),
+    )
+
+    return DFMdetObservation(
+        image=padded_image,
+        weight=padded_weight,
+        bmask=padded_bmask,
+        ormask=padded_ormask,
+        noise=padded_noise,
+        mfrac=padded_mfrac,
+        wcs=new_wcs,
+        psf=obs.psf,  # PSF doesn't need padding
+        meta=obs.meta,
+        store_pixels=obs.store_pixels,
+        ignore_zero_weight=obs.ignore_zero_weight,
+    )
+
+
+def jax_get_mb_obs(obs_in, pad_width=0):
     """Convert input to a DFMdetMultiBandObsList.
 
     JAX equivalent of ngmix.observation.get_mb_obs.
@@ -497,11 +598,15 @@ def jax_get_mb_obs(obs_in):
     ----------
     obs_in : DFMdetObservation, DFMdetObsList, or DFMdetMultiBandObsList
         Input data to convert to a DFMdetMultiBandObsList.
+    pad_width : int, optional
+        If > 0, pad all observations by this amount on all sides.
+        This is useful for sub-observation extraction to avoid boundary issues.
+        Default is 0 (no padding).
 
     Returns
     -------
     mbobs : DFMdetMultiBandObsList
-        A DFMdetMultiBandObsList containing the input data.
+        A DFMdetMultiBandObsList containing the input data, optionally padded.
     """
     if isinstance(obs_in, DFMdetObservation):
         obs_list = DFMdetObsList([obs_in])
@@ -514,4 +619,14 @@ def jax_get_mb_obs(obs_in):
         raise ValueError(
             "obs should be DFMdetObservation, DFMdetObsList, or DFMdetMultiBandObsList"
         )
+
+    # Pad all observations if requested
+    if pad_width > 0:
+        obs = DFMdetMultiBandObsList(
+            [
+                DFMdetObsList([pad_observation(o, pad_width) for o in obslist])
+                for obslist in obs
+            ]
+        )
+
     return obs
