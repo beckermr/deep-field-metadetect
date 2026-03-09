@@ -125,6 +125,9 @@ def jax_single_band_deep_field_metadetect(
     peak_finder_noise: float
         used only when use_sep is False. Sets the noise level for detection.
         Default: 1e-5.
+    debug_verbose: bool
+        Prints results after detection.
+        Used for debugging.
 
     Returns
     -------

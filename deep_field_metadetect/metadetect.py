@@ -30,6 +30,7 @@ def single_band_deep_field_metadetect(
     force_maxk_psf=0.0,
     fft_size=None,
     return_debug_info=False,
+    debug_verbose=False,
 ):
     """Run deep-field metadetection for a simple scenario of a single band
     with a single image per band using only post-PSF Gaussian weighted moments.
@@ -79,6 +80,11 @@ def single_band_deep_field_metadetect(
         To fix max and min values of FFT size.
         Defaults to None which lets Galsim determine the values.
         Used mainly to test against Galsim.
+    return_debug_info: bool
+        return detections and mcal_res for debugging
+    debug_verbose: bool
+        Prints results after detection.
+        Used for debugging.
 
     Returns
     -------
@@ -118,7 +124,8 @@ def single_band_deep_field_metadetect(
     for shear in shears:
         obs = mcal_res[shear]
         detres = run_detection_sep(obs, nodet_flags=nodet_flags)
-        print("num detections : " + str(len(detres["catalog"]["x"])))
+        if debug_verbose:
+            print("num detections : " + str(len(detres["catalog"]["x"])))
         ixc = (detres["catalog"]["x"] + 0.5).astype(int)
         iyc = (detres["catalog"]["y"] + 0.5).astype(int)
         bmask_flags = obs.bmask[iyc, ixc]
@@ -147,7 +154,8 @@ def single_band_deep_field_metadetect(
                 (ind + 1, obj["x"], obj["y"], shear, bmask_flags[ind], mfrac_vals[ind])
                 + tuple(fres[0])
             )
-            print(str(ind) + "non-jax tuple:" + str(tuple(fres[0])))
+            if debug_verbose:
+                print(str(ind) + "non-jax tuple:" + str(tuple(fres[0])))
 
     total_dtype = [
         ("id", "i8"),
