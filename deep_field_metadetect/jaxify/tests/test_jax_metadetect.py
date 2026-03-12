@@ -231,20 +231,29 @@ def test_metadetect_single_band_deep_field_metadetect_jax_vs_ngmix(deep_psf_rati
             res_p_ngmix.append(res_ngmix[0])
             res_m_ngmix.append(res_ngmix[1])
 
-            assert np.allclose(
-                res[0].tolist(),
-                res_ngmix[0].tolist(),
-                atol=1e-5,
-                rtol=0.025,
-                equal_nan=True,
-            )
-            assert np.allclose(
-                res[1].tolist(),
-                res_ngmix[1].tolist(),
-                atol=1e-5,
-                rtol=0.025,
-                equal_nan=True,
-            )
+            # Compare res_p (positive shear) field by field
+            for field_name in res[0].dtype.names:
+                jax_val = res[0][field_name]
+                ngmix_val = res_ngmix[0][field_name]
+                diff = jax_val - ngmix_val
+                assert np.allclose(
+                    jax_val, ngmix_val, atol=1e-5, rtol=0.025, equal_nan=True
+                ), (
+                    f"res_m field '{field_name}': "
+                    f"JAX={jax_val}, ngmix={ngmix_val}, diff={diff}"
+                )
+
+            # Compare res_m (negative shear) field by field
+            for field_name in res[1].dtype.names:
+                jax_val = res[1][field_name]
+                ngmix_val = res_ngmix[1][field_name]
+                diff = jax_val - ngmix_val
+                assert np.allclose(
+                    jax_val, ngmix_val, atol=1e-5, rtol=0.025, equal_nan=True
+                ), (
+                    f"res_m field '{field_name}': "
+                    f"JAX={jax_val}, ngmix={ngmix_val}, diff={diff}"
+                )
 
     m, merr, c1, c1err, c2, c2err = estimate_m_and_c(
         np.concatenate(res_p),
