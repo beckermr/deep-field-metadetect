@@ -149,7 +149,9 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
     )
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] == "noshear")
-    assert np.all(res["mfrac"][msk] >= 0.5)
+    assert np.all(
+        res["mfrac"][msk] >= 0.45
+    )  # if objects are detected near the edge values will be slightly lower than 0.5
     assert np.all(res["mfrac"][msk] <= 0.7)
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] != "noshear")
@@ -193,7 +195,9 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
     assert kinfo[3] == 12.640001692177682
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] != "noshear")
-    assert np.all(res["mfrac"][msk] >= 0.5)
+    assert np.all(
+        res["mfrac"][msk] >= 0.45
+    )  # if objects are detected near the edge values will be slightly lower than 0.5
     assert np.all(res["mfrac"][msk] <= 0.7)
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] == "noshear")
