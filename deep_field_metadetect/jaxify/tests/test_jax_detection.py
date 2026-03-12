@@ -146,7 +146,7 @@ def test_edge_case_detection():
     image = image.at[5, 5].set(5.0)
 
     noise = 0.0
-    peaks, refined, border_flags = detect_galaxies(
+    peaks, refined, border_flags, det_flag = detect_galaxies(
         image=image,
         noise=noise,
         window_size=3,
@@ -221,7 +221,7 @@ def test_complete_gaussian_detection():
     )
 
     noise = 0.0
-    peaks, refined, _ = detect_galaxies(
+    peaks, refined, _, _ = detect_galaxies(
         image, noise=noise, window_size=5, refine_centroids=True, max_objects=10
     )
 
@@ -252,7 +252,7 @@ def test_detection_with_noise():
     image_noisy = image_clean + noise
 
     noise = 0.2
-    _, refined, _ = detect_galaxies(
+    _, refined, _, _ = detect_galaxies(
         image_noisy, noise=noise, window_size=5, refine_centroids=True, max_objects=5
     )
 
@@ -280,12 +280,12 @@ def test_faint_galaxy_detection():
 
     # Test with threshold that should catch both
     noise = 0.2
-    peaks_low, _, _ = detect_galaxies(image, noise=noise, max_objects=5)
+    peaks_low, _, _, _ = detect_galaxies(image, noise=noise, max_objects=5)
     valid_low = peaks_low[peaks_low[:, 0] > 0]
 
     # Test with threshold that should only catch bright one
     noise = 0.3
-    peaks_high, _, _ = detect_galaxies(image, noise=noise, max_objects=5)
+    peaks_high, _, _, _ = detect_galaxies(image, noise=noise, max_objects=5)
     valid_high = peaks_high[peaks_high[:, 0] > 0]
 
     assert len(valid_low) == 2
@@ -368,3 +368,97 @@ def test_noise_rejitting():
     result_float = local_maxima_filter(image, noise=0.3, window_size=3)
 
     assert jnp.all(result_array == result_float)
+
+
+def test_det_flag():
+    """Test that det_flag correctly identifies actual detections vs fill values."""
+    # Create image with 3 Gaussian blobs
+    centers = [(5, 5), (5, 15), (15, 10)]
+    amplitudes = [2.0, 1.5, 1.8]
+    image = create_multiple_gaussian_blobs(
+        (21, 21), centers, sigmas=[1.5] * 3, amplitudes=amplitudes
+    )
+
+    noise = 0.0
+    max_objects = 10  # More than actual detections
+
+    # Test peak_finder
+    positions, det_flag = peak_finder(
+        image, noise=noise, window_size=5, max_objects=max_objects
+    )
+
+    # First 3 should be actual detections (det_flag=0)
+    assert jnp.sum(det_flag == 0) == 3, "Should have 3 actual detections"
+    assert jnp.sum(det_flag == 1) == 7, "Should have 7 fill values"
+
+    # Verify that actual detections have valid positions
+    actual_detections = positions[det_flag == 0]
+    for pos in actual_detections:
+        assert pos[0] >= 0 and pos[1] >= 0, (
+            "Actual detections should have valid positions"
+        )
+
+    # Verify that fill values have (-1, -1) positions
+    fill_positions = positions[det_flag == 1]
+    for pos in fill_positions:
+        assert jnp.array_equal(pos, jnp.array([-1, -1])), (
+            "Fill values should be (-1, -1)"
+        )
+
+    # Test detect_galaxies
+    peaks, refined, border_flags, det_flag_full = detect_galaxies(
+        image,
+        noise=noise,
+        window_size=5,
+        refine_centroids=True,
+        max_objects=max_objects,
+    )
+
+    # Should have same det_flag pattern
+    assert jnp.sum(det_flag_full == 0) == 3, (
+        "detect_galaxies should have 3 actual detections"
+    )
+    assert jnp.sum(det_flag_full == 1) == 7, "detect_galaxies should have 7 fill values"
+
+    # Verify consistency between det_flag and positions
+    assert jnp.all(det_flag == det_flag_full), "det_flag should be consistent"
+
+
+def test_det_flag_no_detections():
+    """Test det_flag when no objects are detected."""
+    # Create empty image (all below threshold)
+    image = jnp.ones((10, 10)) * 0.1
+    noise = 1.0  # High threshold
+    max_objects = 5
+
+    positions, det_flag = peak_finder(
+        image, noise=noise, window_size=5, max_objects=max_objects
+    )
+
+    # All should be fill values (det_flag=1)
+    assert jnp.all(det_flag == 1), (
+        "All entries should be fill values when no detections"
+    )
+    assert jnp.all(positions == -1), (
+        "All positions should be (-1, -1) when no detections"
+    )
+
+
+def test_det_flag_max_detections():
+    """Test det_flag when number of detections equals max_objects."""
+    # Create image with exactly max_objects detections
+    max_objects = 4
+    centers = [(2, 2), (2, 7), (7, 2), (7, 7)]
+    amplitudes = [2.0] * 4
+    image = create_multiple_gaussian_blobs(
+        (10, 10), centers, sigmas=[1.0] * 4, amplitudes=amplitudes
+    )
+
+    noise = 0.0
+    positions, det_flag = peak_finder(
+        image, noise=noise, window_size=5, max_objects=max_objects
+    )
+
+    # All should be actual detections (det_flag=0)
+    assert jnp.all(det_flag == 0), "All entries should be actual detections"
+    assert jnp.all(positions[:, 0] >= 0), "All positions should be valid"

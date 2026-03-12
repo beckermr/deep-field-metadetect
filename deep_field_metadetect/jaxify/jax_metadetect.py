@@ -191,7 +191,7 @@ def jax_single_band_deep_field_metadetect(
             x_coords = detres["catalog"]["x"]
             y_coords = detres["catalog"]["y"]
         else:
-            _, detres, _ = detect_galaxies(
+            _, detres, _, _ = detect_galaxies(
                 mcal_res[shear].image, noise=peak_finder_noise, max_objects=max_objects
             )  # TODO: Noise threshold
             valid_peak_mask = (detres[:, 0] >= 0) & (detres[:, 1] >= 0)

@@ -77,6 +77,9 @@ def peak_finder(
     positions : jnp.ndarray
         Array of peak coordinates (y, x) of shape (max_objects, 2)
         Invalid entries filled with (-1, -1)
+    det_flag : jnp.ndarray
+        Integer array of shape (max_objects,) where:
+        0 = actual detection, 1 = fill value
     """
     local_max_mask = local_maxima_filter(
         image=image,
@@ -86,7 +89,11 @@ def peak_finder(
 
     positions = jnp.argwhere(local_max_mask, size=max_objects, fill_value=(-1, -1))
 
-    return positions
+    # Create detection flag: 0 for actual detections, 1 for fill values
+    # Fill values have (-1, -1) coordinates
+    det_flag = jnp.all(positions == -1, axis=1).astype(jnp.int32)
+
+    return positions, det_flag
 
 
 @partial(jax.jit, static_argnames=["window_size"])
@@ -179,7 +186,7 @@ def detect_galaxies(
     window_size: int = 5,
     refine_centroids: bool = True,
     max_objects: int = 100,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     Complete galaxy center detection pipeline with JIT compilation support.
 
@@ -208,8 +215,11 @@ def detect_galaxies(
         Returns the refined floating point values of the center.
     border_flags : jnp.ndarray
         Array indicating which objects were near border (shape max_objects,)
+    det_flag : jnp.ndarray
+        Integer array of shape (max_objects,) where:
+        0 = actual detection, 1 = fill value
     """
-    peak_positions = peak_finder(
+    peak_positions, det_flag = peak_finder(
         image=image,
         noise=noise,
         window_size=window_size,
@@ -218,14 +228,14 @@ def detect_galaxies(
 
     if not refine_centroids:
         border_flags = jnp.zeros(max_objects, dtype=bool)
-        return peak_positions, peak_positions.astype(float), border_flags
+        return peak_positions, peak_positions.astype(float), border_flags, det_flag
 
     refined_positions, border_flags = refine_centroid_in_cell(
         image, peak_positions, window_size=5
     )  # Using only a single iteration for now.
     # Multiple iter not tested, but can lead to unstability for blended objects
 
-    return peak_positions, refined_positions, border_flags
+    return peak_positions, refined_positions, border_flags, det_flag
 
 
 @partial(jax.jit, static_argnames=["max_iterations"])
