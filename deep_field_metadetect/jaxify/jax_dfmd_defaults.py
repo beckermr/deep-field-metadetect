@@ -6,3 +6,5 @@ DEFAULT_FFT_SIZE = 256
 
 DEFAULT_RECONV_DK = compute_dk(pixel_scale=0.2, image_size=53)
 DEFAULT_KIM_SIZE = compute_kim_size(image_size=DEFAULT_NXY_PSF)
+
+MAX_OBJECTS = 100  # Max number of objects in a field

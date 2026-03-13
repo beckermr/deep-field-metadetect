@@ -62,6 +62,7 @@ def _run_single_sim(
         skip_obs_deep_corrections=skip_deep,
         reconv_psf_dk=dk,
         reconv_psf_kim_size=kim_size,
+        use_sep=True,
     )
     return measure_mcal_shear_quants(res)
 
@@ -160,6 +161,7 @@ def _run_single_sim_jax_and_ngmix(
         fft_size=DEFAULT_FFT_SIZE,
         reconv_psf_dk=dk,
         reconv_psf_kim_size=kim_size,
+        use_sep=True,
     )
 
     res = results[0]
@@ -229,20 +231,29 @@ def test_metadetect_single_band_deep_field_metadetect_jax_vs_ngmix(deep_psf_rati
             res_p_ngmix.append(res_ngmix[0])
             res_m_ngmix.append(res_ngmix[1])
 
-            assert np.allclose(
-                res[0].tolist(),
-                res_ngmix[0].tolist(),
-                atol=1e-5,
-                rtol=0.025,
-                equal_nan=True,
-            )
-            assert np.allclose(
-                res[1].tolist(),
-                res_ngmix[1].tolist(),
-                atol=1e-5,
-                rtol=0.025,
-                equal_nan=True,
-            )
+            # Compare res_p (positive shear) field by field
+            for field_name in res[0].dtype.names:
+                jax_val = res[0][field_name]
+                ngmix_val = res_ngmix[0][field_name]
+                diff = jax_val - ngmix_val
+                assert np.allclose(
+                    jax_val, ngmix_val, atol=1e-5, rtol=0.025, equal_nan=True
+                ), (
+                    f"res_m field '{field_name}': "
+                    f"JAX={jax_val}, ngmix={ngmix_val}, diff={diff}"
+                )
+
+            # Compare res_m (negative shear) field by field
+            for field_name in res[1].dtype.names:
+                jax_val = res[1][field_name]
+                ngmix_val = res_ngmix[1][field_name]
+                diff = jax_val - ngmix_val
+                assert np.allclose(
+                    jax_val, ngmix_val, atol=1e-5, rtol=0.025, equal_nan=True
+                ), (
+                    f"res_m field '{field_name}': "
+                    f"JAX={jax_val}, ngmix={ngmix_val}, diff={diff}"
+                )
 
     m, merr, c1, c1err, c2, c2err = estimate_m_and_c(
         np.concatenate(res_p),
@@ -284,7 +295,7 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
         g2=0.00,
         s2n=1000,
         deep_noise_fac=1.0 / np.sqrt(10),
-        deep_psf_fac=1,
+        deep_psf_fac=1.0,
         dim=nxy,
         dim_psf=nxy_psf,
         scale=scale,
@@ -389,9 +400,7 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
         n_objs=10,
         return_dfmd_obs=True,
     )
-    obs_d = obs_d.replace(
-        mfrac=np.float32(rng.uniform(0.5, 0.7, size=obs_w.image.shape))
-    )
+    obs_d = obs_d.replace(mfrac=rng.uniform(0.5, 0.7, size=obs_w.image.shape))
 
     dk = compute_dk(image_size=nxy_psf, pixel_scale=scale)
     kim_size = compute_kim_size(image_size=nxy_psf)

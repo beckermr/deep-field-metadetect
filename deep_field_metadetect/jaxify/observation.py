@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 import jax_galsim
@@ -102,17 +104,16 @@ class DFMdetObservation:
         store_pixels=True,
         ignore_zero_weight=True,
     ):
-        image = image
         if weight is None:
-            weight = jnp.ones_like(image, dtype=jnp.float32)
+            weight = jnp.ones_like(image)
         if bmask is None:
             bmask = jnp.zeros_like(image, dtype=jnp.int32)
         if ormask is None:
             ormask = jnp.zeros_like(image, dtype=jnp.int32)
         if noise is None:
-            noise = jnp.zeros_like(image, dtype=jnp.float32)
+            noise = jnp.zeros_like(image)
         if mfrac is None:
-            mfrac = jnp.zeros_like(image, dtype=jnp.float32)
+            mfrac = jnp.zeros_like(image)
         if meta is None:
             meta = {}
 
@@ -232,7 +233,7 @@ def ngmix_obs_to_dfmd_obs(obs: ngmix.observation.Observation) -> DFMdetObservati
         psf_obs = obs.get_psf()
         psf_jacobian = psf_obs.get_jacobian()
         psf = DFMdetPSF(
-            image=psf_obs.image,
+            image=psf_obs.image.astype(float),
             wcs=jax_galsim.wcs.AffineTransform(
                 dudx=psf_jacobian.dudcol,
                 dudy=psf_jacobian.dudrow,
@@ -350,3 +351,282 @@ def dfmd_obs_to_ngmix_obs(dfmd_obs: DFMdetObservation) -> Observation:
         store_pixels=np.array(dfmd_obs.store_pixels, dtype=np.bool_),
         ignore_zero_weight=np.array(dfmd_obs.ignore_zero_weight, dtype=np.bool_),
     )
+
+
+@jax.tree_util.register_pytree_node_class
+class DFMdetObsList:
+    """JAX-compatible observation list for Deep Field Metadetect.
+
+    Similar to ngmix.ObsList but designed for JAX compatibility.
+    This class is immutable and JIT-compatible with fixed size.
+
+    Parameters
+    ----------
+    obs_list : tuple or list of DFMdetObservation, optional
+        The observations to store. Must be provided at construction.
+    meta : dict, optional
+        Metadata dictionary.
+    """
+
+    def __init__(self, obs_list=None, meta=None):
+        if obs_list is None:
+            self._obs_list = ()
+        else:
+            # Store as immutable tuple for JIT compatibility
+            self._obs_list = tuple(obs_list)
+
+        self.meta = meta if meta is not None else {}
+
+    def set(self, index, obs):
+        """Create a new DFMdetObsList with an observation replaced at index.
+
+        This is a functional operation that returns a new instance with the same size.
+
+        Parameters
+        ----------
+        index : int
+            Index of the observation to replace.
+        obs : DFMdetObservation
+            The new observation.
+
+        Returns
+        -------
+        DFMdetObsList
+            New instance with the observation replaced.
+        """
+        if not isinstance(obs, DFMdetObservation):
+            raise TypeError("Can only set DFMdetObservation objects")
+        new_list = list(self._obs_list)
+        new_list[index] = obs
+        return DFMdetObsList(tuple(new_list), self.meta)
+
+    def __len__(self):
+        return len(self._obs_list)
+
+    def __getitem__(self, index):
+        return self._obs_list[index]
+
+    def __setitem__(self, index, obs):
+        raise NotImplementedError(
+            "DFMdetObsList is immutable. Use .set(index, obs) instead."
+        )
+
+    def __iter__(self):
+        return iter(self._obs_list)
+
+    def tree_flatten(self):
+        return self._obs_list, self.meta
+
+    @classmethod
+    def tree_unflatten(cls, meta, obs_list):
+        return cls(obs_list, meta)
+
+
+@jax.tree_util.register_pytree_node_class
+class DFMdetMultiBandObsList:
+    """JAX-compatible multi-band observation list for Deep Field Metadetect.
+
+    Similar to ngmix.MultiBandObsList but designed for JAX compatibility.
+    This class is immutable and JIT-compatible with fixed size.
+
+    Parameters
+    ----------
+    mb_obs_list : tuple or list of DFMdetObsList, optional
+        The observation lists for each band. Must be provided at construction.
+    meta : dict, optional
+        Metadata dictionary.
+    """
+
+    def __init__(self, mb_obs_list=None, meta=None):
+        if mb_obs_list is None:
+            self._mb_obs_list = ()
+        else:
+            # Store as immutable tuple for JIT compatibility
+            self._mb_obs_list = tuple(mb_obs_list)
+        self.meta = meta if meta is not None else {}
+
+    def set(self, index, obs_list):
+        """Create a new DFMdetMultiBandObsList with an obs list replaced at index.
+
+        This is a functional operation that returns a new instance with the same size.
+
+        Parameters
+        ----------
+        index : int
+            Index of the band to replace.
+        obs_list : DFMdetObsList
+            The new observation list for this band.
+
+        Returns
+        -------
+        DFMdetMultiBandObsList
+            New instance with the observation list replaced.
+        """
+        if not isinstance(obs_list, DFMdetObsList):
+            raise TypeError("Can only set DFMdetObsList objects")
+        new_list = list(self._mb_obs_list)
+        new_list[index] = obs_list
+        return DFMdetMultiBandObsList(tuple(new_list), self.meta)
+
+    def __len__(self):
+        return len(self._mb_obs_list)
+
+    def __getitem__(self, index):
+        return self._mb_obs_list[index]
+
+    def __setitem__(self, index, obs_list):
+        raise NotImplementedError(
+            "DFMdetMultiBandObsList is immutable. Use .set(index, obs_list) instead."
+        )
+
+    def __iter__(self):
+        return iter(self._mb_obs_list)
+
+    def tree_flatten(self):
+        return self._mb_obs_list, self.meta
+
+    @classmethod
+    def tree_unflatten(cls, meta, mb_obs_list):
+        return cls(mb_obs_list, meta)
+
+
+# Constants for padding
+BMASK_EDGE = 2**30
+DEFAULT_IMAGE_VALUES = {
+    "image": 0.0,
+    "weight": 0.0,
+    "bmask": BMASK_EDGE,
+    "noise": 0.0,
+    "mfrac": 0.0,
+}
+
+
+@partial(jax.jit, static_argnames=["pad_width"])
+def pad_observation(obs: DFMdetObservation, pad_width: int) -> DFMdetObservation:
+    """Pad observation arrays with appropriate default values.
+
+    This function pads all image arrays in the observation with a fixed width
+    on all sides, using appropriate default values for regions outside the
+    original image bounds. The WCS is updated to account for the padding offset.
+
+    Parameters
+    ----------
+    obs : DFMdetObservation
+        The observation to pad.
+    pad_width : int
+        Number of pixels to pad on all sides.
+
+    Returns
+    -------
+    DFMdetObservation
+        New observation with padded arrays and adjusted WCS.
+    """
+    # Pad each array with appropriate default values
+    padded_image = jnp.pad(
+        obs.image,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=DEFAULT_IMAGE_VALUES["image"],
+    )
+
+    padded_weight = jnp.pad(
+        obs.weight,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=DEFAULT_IMAGE_VALUES["weight"],
+    )
+
+    padded_bmask = jnp.pad(
+        obs.bmask,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=DEFAULT_IMAGE_VALUES["bmask"],
+    )
+
+    padded_ormask = jnp.pad(
+        obs.ormask, pad_width=pad_width, mode="constant", constant_values=0
+    )
+
+    padded_noise = jnp.pad(
+        obs.noise,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=DEFAULT_IMAGE_VALUES["noise"],
+    )
+
+    padded_mfrac = jnp.pad(
+        obs.mfrac,
+        pad_width=pad_width,
+        mode="constant",
+        constant_values=DEFAULT_IMAGE_VALUES["mfrac"],
+    )
+
+    # Update WCS origin to account for padding
+    # The origin shifts by pad_width pixels in both x and y
+    new_wcs = jax_galsim.wcs.AffineTransform(
+        dudx=obs.wcs.dudx,
+        dudy=obs.wcs.dudy,
+        dvdx=obs.wcs.dvdx,
+        dvdy=obs.wcs.dvdy,
+        origin=jax_galsim.PositionD(
+            x=obs.wcs.origin.x + pad_width,
+            y=obs.wcs.origin.y + pad_width,
+        ),
+    )
+
+    return DFMdetObservation(
+        image=padded_image,
+        weight=padded_weight,
+        bmask=padded_bmask,
+        ormask=padded_ormask,
+        noise=padded_noise,
+        mfrac=padded_mfrac,
+        wcs=new_wcs,
+        psf=obs.psf,  # PSF doesn't need padding
+        meta=obs.meta,
+        store_pixels=obs.store_pixels,
+        ignore_zero_weight=obs.ignore_zero_weight,
+    )
+
+
+def jax_get_mb_obs(obs_in, pad_width=0):
+    """Convert input to a DFMdetMultiBandObsList.
+
+    JAX equivalent of ngmix.observation.get_mb_obs.
+
+    Parameters
+    ----------
+    obs_in : DFMdetObservation, DFMdetObsList, or DFMdetMultiBandObsList
+        Input data to convert to a DFMdetMultiBandObsList.
+    pad_width : int, optional
+        If > 0, pad all observations by this amount on all sides.
+        This is useful for sub-observation extraction to avoid boundary issues.
+        Default is 0 (no padding).
+
+    Returns
+    -------
+    mbobs : DFMdetMultiBandObsList
+        A DFMdetMultiBandObsList containing the input data, optionally padded.
+    """
+    if isinstance(obs_in, DFMdetObservation):
+        obs_list = DFMdetObsList([obs_in])
+        obs = DFMdetMultiBandObsList([obs_list])
+    elif isinstance(obs_in, DFMdetObsList):
+        obs = DFMdetMultiBandObsList([obs_in])
+    elif isinstance(obs_in, DFMdetMultiBandObsList):
+        obs = obs_in
+    else:
+        raise ValueError(
+            "obs should be DFMdetObservation, DFMdetObsList, or DFMdetMultiBandObsList"
+        )
+
+    # Pad all observations if requested
+    if pad_width > 0:
+        obs = DFMdetMultiBandObsList(
+            [
+                DFMdetObsList([pad_observation(o, pad_width) for o in obslist])
+                for obslist in obs
+            ]
+        )
+
+    return obs
