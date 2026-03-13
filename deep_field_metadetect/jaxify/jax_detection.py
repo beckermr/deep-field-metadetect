@@ -102,8 +102,10 @@ def refine_centroid(
 ) -> Tuple[float, float, bool]:
     """
     Refine peak position of single object using intensity-weighted centroid.
-    Skips refinement for objects too close to the border.
-    Returns whether object was near border for warning purposes.
+
+    Skips refinement if too close to the border or if proposed shift > 1 pixel.
+    The proposed shift can be > 1 if the noise theshold is not properly set
+    and detections are in noisy regions.
 
     Parameters:
     -----------
@@ -113,15 +115,16 @@ def refine_centroid(
         Initial peak position
     window_size : int
         Size of window around peak for centroid calculation
-        if window crosses image boudary, optimization is skipped.
+        if window crosses image boundary, optimization is skipped.
 
     Returns:
     --------
     jnp.ndarray
         Refined peak coordinates (refined_y, refined_x) : float
-        Note: original coordinatesare returned if near border
-    near_border : bool
-        True if object was near border and refinement was skipped
+        Note: original coordinates are returned if refinement is skipped
+    refinement_flag : bool
+        True (1) if refinement was skipped (near border or large shift),
+        False (0) if refinement was applied
     """
     half_window = window_size // 2
     height, width = image.shape
@@ -135,7 +138,7 @@ def refine_centroid(
     )
 
     def border_case():
-        return jnp.array([peak[0], peak[1]], dtype=jnp.float_)
+        return jnp.array([peak[0], peak[1]], dtype=jnp.float_), True
 
     def normal_case():
         window = jax.lax.dynamic_slice(
@@ -155,14 +158,25 @@ def refine_centroid(
         y_shift = jnp.sum((y_grid) * window) / total_intensity
         x_shift = jnp.sum((x_grid) * window) / total_intensity
 
-        refined_y = y_shift + peak[0]
-        refined_x = x_shift + peak[1]
+        # Check if proposed shift is > 1 pixel
+        shift_magnitude = jnp.sqrt(y_shift**2 + x_shift**2)
+        shift_too_large = shift_magnitude > 1.0
 
-        return jnp.array([refined_y, refined_x], dtype=jnp.float_)
+        def apply_shift():
+            refined_y = y_shift + peak[0]
+            refined_x = x_shift + peak[1]
+            # Clip coordinates to be within valid image bounds
+            refined_y = jnp.clip(refined_y, 0.0, height - 1.0)
+            refined_x = jnp.clip(refined_x, 0.0, width - 1.0)
+            return jnp.array([refined_y, refined_x], dtype=jnp.float_), False
 
-    result = jax.lax.cond(near_border, border_case, normal_case)
+        def skip_shift():
+            return jnp.array([peak[0], peak[1]], dtype=jnp.float_), True
 
-    return jnp.array([result[0], result[1]]), near_border
+        return jax.lax.cond(shift_too_large, skip_shift, apply_shift)
+
+    result, flag = jax.lax.cond(near_border, border_case, normal_case)
+    return result, flag
 
 
 @partial(jax.jit, static_argnames=["window_size"])
@@ -173,6 +187,13 @@ def refine_centroid_in_cell(
 ):
     """
     vmapped version of refine_centroid
+
+    Returns:
+    --------
+    refined_positions : jnp.ndarray
+        Array of refined coordinates
+    refinement_flags : jnp.ndarray
+        Array of flags (1 if refinement skipped, 0 if applied)
     """
     return jax.vmap(refine_centroid, in_axes=(None, 0, None))(
         image, peak_positions, window_size
@@ -213,8 +234,9 @@ def detect_galaxies(
     refined_positions : jnp.ndarray
         Array of detected galaxy centers (y, x) after centroid refinement.
         Returns the refined floating point values of the center.
-    border_flags : jnp.ndarray
-        Array indicating which objects were near border (shape max_objects,)
+    refinement_flags : jnp.ndarray
+        Array indicating which objects had refinement skipped (shape max_objects,)
+        1 = refinement skipped (near border or large shift), 0 = refinement applied
     det_flag : jnp.ndarray
         Integer array of shape (max_objects,) where:
         0 = actual detection, 1 = fill value
@@ -227,15 +249,15 @@ def detect_galaxies(
     )
 
     if not refine_centroids:
-        border_flags = jnp.zeros(max_objects, dtype=bool)
-        return peak_positions, peak_positions.astype(float), border_flags, det_flag
+        refinement_flags = jnp.zeros(max_objects, dtype=bool)
+        return peak_positions, peak_positions.astype(float), refinement_flags, det_flag
 
-    refined_positions, border_flags = refine_centroid_in_cell(
+    refined_positions, refinement_flags = refine_centroid_in_cell(
         image, peak_positions, window_size=5
     )  # Using only a single iteration for now.
-    # Multiple iter not tested, but can lead to unstability for blended objects
+    # Multiple iter not tested, but can lead to instability for blended objects
 
-    return peak_positions, refined_positions, border_flags, det_flag
+    return peak_positions, refined_positions, refinement_flags, det_flag
 
 
 @partial(jax.jit, static_argnames=["max_iterations"])

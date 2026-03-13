@@ -146,7 +146,7 @@ def test_edge_case_detection():
     image = image.at[5, 5].set(5.0)
 
     noise = 0.0
-    peaks, refined, border_flags, det_flag = detect_galaxies(
+    peaks, refined, refinement_flags, det_flag = detect_galaxies(
         image=image,
         noise=noise,
         window_size=3,
@@ -174,7 +174,7 @@ def test_gaussian_centroid_refinement():
 
     # Start refinement from nearest grid point
     initial_peak = (4, 5)
-    refined_peak, near_border = refine_centroid(image, initial_peak, window_size=5)
+    refined_peak, refinement_flag = refine_centroid(image, initial_peak, window_size=5)
 
     # Refined position should be closer to true center
     initial_distance = np.sqrt(
@@ -187,7 +187,7 @@ def test_gaussian_centroid_refinement():
     )
 
     assert refined_distance < initial_distance
-    assert not near_border
+    assert not refinement_flag
 
 
 def test_near_border():
@@ -199,10 +199,40 @@ def test_near_border():
         (5, 5), centers, sigmas=[1.0], amplitudes=amplitudes
     )
 
-    refined_pos, near_border = refine_centroid(image, (4, 4), window_size=5)
+    refined_pos, refinement_flag = refine_centroid(image, (4, 4), window_size=5)
 
     assert (refined_pos[0] == 4) & (refined_pos[1] == 4)  # refined is same as input
-    assert near_border
+    assert refinement_flag
+
+
+def test_noisy_region_refinement_skip():
+    """Test that refinement is skipped where shift > 1 pixel."""
+    # Create an image with mostly noise and one fake peak
+    np.random.seed(42)
+    image = jnp.array(np.random.normal(0, 1e-5, (20, 20)))
+
+    # Add a very weak "peak" that's actually just noise fluctuation
+    # This simulates a spurious detection in a noisy region
+    peak_y, peak_x = 10, 10
+    image = image.at[peak_y, peak_x].set(2e-5)  # Slightly higher than noise
+
+    # Create an asymmetric noise pattern around the peak that would cause large shift
+    # Make one side strongly negative and other side positive
+    image = image.at[peak_y - 1, peak_x - 1].set(-7e-5)  # Strong negative on one side
+    image = image.at[peak_y + 1, peak_x + 1].set(8e-5)  # Strong positive on other side
+
+    # Try to refine this peak
+    refined_pos, refinement_flag = refine_centroid(
+        image, (peak_y, peak_x), window_size=5
+    )
+
+    # The refinement should be skipped because the proposed shift would be > 1 pixel
+    # due to the asymmetric noise pattern
+    assert refinement_flag, "Refinement should be skipped (flag=1) for large shift"
+    # Coordinates should remain unchanged
+    assert refined_pos[0] == peak_y and refined_pos[1] == peak_x, (
+        "Position should not change when refinement is skipped"
+    )
 
 
 # -----------------------------
@@ -406,7 +436,7 @@ def test_det_flag():
         )
 
     # Test detect_galaxies
-    peaks, refined, border_flags, det_flag_full = detect_galaxies(
+    peaks, refined, refinement_flags, det_flag_full = detect_galaxies(
         image,
         noise=noise,
         window_size=5,
