@@ -8,7 +8,7 @@ from deep_field_metadetect.detect import (
 from deep_field_metadetect.jaxify import jax_dfmd_defaults
 from deep_field_metadetect.jaxify.jax_detection import (
     detect_galaxies,
-    jax_generate_mbobs_for_detections,
+    jax_batch_generate_mbobs_for_detections,
 )
 from deep_field_metadetect.jaxify.jax_metacal import (
     DEFAULT_SHEARS,
@@ -19,7 +19,6 @@ from deep_field_metadetect.jaxify.jax_mfrac import jax_compute_mfrac_interp_imag
 from deep_field_metadetect.jaxify.jax_utils import (
     jax_fit_gauss_mom_obs,
     jax_fit_single_detection,
-    stack_detection_results,
 )
 from deep_field_metadetect.jaxify.observation import (
     dfmd_obs_to_ngmix_obs,
@@ -50,7 +49,6 @@ def jax_single_band_deep_field_metadetect(
     moment_stamp_size=48,
     use_sep=False,
     return_debug_info=False,
-    peak_finder_noise=1e-5,
     debug_verbose=False,
 ):
     """Run deep-field metadetection for a simple scenario of a single band
@@ -122,9 +120,6 @@ def jax_single_band_deep_field_metadetect(
         use sep for detection. Otherwise jax peak finder is used.
     return_debug_info: bool
         return detections and mcal_res for debugging
-    peak_finder_noise: float
-        used only when use_sep is False. Sets the noise level for detection.
-        Default: 1e-5.
     debug_verbose: bool
         Prints results after detection.
         Used for debugging.
@@ -180,32 +175,74 @@ def jax_single_band_deep_field_metadetect(
         if use_sep:
             obs = dfmd_obs_to_ngmix_obs(mcal_res[shear])
             detres = run_detection_sep(obs, nodet_flags=nodet_flags, detect_thresh=3)
+            num_detections = len(detres["catalog"]["x"])
             if debug_verbose:
-                print("num detections : " + str(len(detres["catalog"]["x"])))
+                print("num detections : " + str(num_detections))
 
-            ixc = (detres["catalog"]["x"] + 0.5).astype(int)
-            iyc = (detres["catalog"]["y"] + 0.5).astype(int)
-            bmask_flags = obs.bmask[iyc, ixc]
+            # Pad SEP detections to max_objects
+            if num_detections > max_objects:
+                # Truncate if we have more detections than max_objects
+                x_coords = jnp.array(detres["catalog"]["x"][:max_objects])
+                y_coords = jnp.array(detres["catalog"]["y"][:max_objects])
+                det_flag = jnp.zeros(max_objects, dtype=jnp.int32)
+            else:
+                # Pad to max_objects with fill values
+                x_coords = jnp.concatenate(
+                    [
+                        jnp.array(detres["catalog"]["x"]),
+                        jnp.full(max_objects - num_detections, -1.0),
+                    ]
+                )
+                y_coords = jnp.concatenate(
+                    [
+                        jnp.array(detres["catalog"]["y"]),
+                        jnp.full(max_objects - num_detections, -1.0),
+                    ]
+                )
+                det_flag = jnp.concatenate(
+                    [
+                        jnp.zeros(num_detections, dtype=jnp.int32),
+                        jnp.ones(max_objects - num_detections, dtype=jnp.int32),
+                    ]
+                )
+
+            # Compute bmask_flags for detections (capped at max_objects)
+            num_to_process = min(num_detections, max_objects)
+            ixc = (x_coords[:num_to_process] + 0.5).astype(int)
+            iyc = (y_coords[:num_to_process] + 0.5).astype(int)
+            bmask_flags_actual = obs.bmask[iyc, ixc]
+
+            if num_detections >= max_objects:
+                bmask_flags = bmask_flags_actual
+            else:
+                bmask_flags = jnp.concatenate(
+                    [
+                        bmask_flags_actual,
+                        jnp.zeros(
+                            max_objects - num_detections, dtype=bmask_flags_actual.dtype
+                        ),
+                    ]
+                )
+
             detections.append(detres["catalog"])
-
-            x_coords = detres["catalog"]["x"]
-            y_coords = detres["catalog"]["y"]
         else:
-            _, detres, _, _ = detect_galaxies(
-                mcal_res[shear].image, noise=peak_finder_noise, max_objects=max_objects
-            )  # TODO: Noise threshold
-            valid_peak_mask = (detres[:, 0] >= 0) & (detres[:, 1] >= 0)
-            detres = detres[valid_peak_mask]
+            # Use the standard deviation of the noise image as the noise threshold
+            noise_level = jnp.std(mcal_res[shear].noise)
+            _, detres, _, det_flag = detect_galaxies(
+                mcal_res[shear].image, noise=noise_level, max_objects=max_objects
+            )
+            num_detections = jnp.sum(det_flag == 0).item()
             if debug_verbose:
-                print("Num detections " + str(len(detres)))
+                print("Num detections " + str(num_detections))
 
-            # Extract coordinates
-            x_coords = detres[:, 0]  # TODO: check if invalid peaks handled well
+            x_coords = detres[:, 1]
             y_coords = detres[:, 0]
 
-            ixc = (x_coords + 0.5).astype(int)
-            iyc = (y_coords + 0.5).astype(int)
-            bmask_flags = mcal_res[shear].bmask[iyc, ixc]
+            # Compute bmask_flags only for actual detections
+            valid_mask = det_flag == 0
+            ixc = jnp.where(valid_mask, (x_coords + 0.5).astype(int), 0)
+            iyc = jnp.where(valid_mask, (y_coords + 0.5).astype(int), 0)
+            bmask_flags = jnp.where(valid_mask, mcal_res[shear].bmask[iyc, ixc], 0)
             detections.append(detres)
 
         def get_mfrac_values():
@@ -219,11 +256,13 @@ def jax_single_band_deep_field_metadetect(
             mfrac_vals = jax.vmap(lambda x, y: _interp_mfrac.xValue(x, y))(
                 x_coords, y_coords
             )
+            # For fill values (-1, -1), the interpolation will not make
+            mfrac_vals = jnp.where(det_flag == 0, mfrac_vals, 0.0)
             return mfrac_vals
 
         def get_zero_mfrac():
             """Return zeros when no mfrac data."""
-            return jnp.zeros_like(bmask_flags, dtype=jnp.float64)
+            return jnp.zeros(max_objects, dtype=jnp.float64)
 
         mfrac_vals = jax.lax.cond(
             jnp.any(mcal_res[shear].mfrac > 0), get_mfrac_values, get_zero_mfrac
@@ -231,32 +270,57 @@ def jax_single_band_deep_field_metadetect(
 
         # Pad observations once before extracting sub-observations
         # pad_width is half of moment_stamp_size
-        pad_width = moment_stamp_size // 2
+        pad_width = moment_stamp_size // 2 + 1
         padded_mbobs = jax_get_mb_obs(mcal_res[shear], pad_width=pad_width)
 
-        for ind, (obj, subobs) in enumerate(
-            jax_generate_mbobs_for_detections(
+        padded_xs = x_coords + pad_width
+        padded_ys = y_coords + pad_width
+
+        # Use batched function to extract all sub-observations at once
+        _, padded_xs_out, padded_ys_out, all_subobs = (
+            jax_batch_generate_mbobs_for_detections(
                 padded_mbobs,
-                xs=x_coords + pad_width,  # New location after padding
-                ys=y_coords + pad_width,
+                xs=padded_xs,
+                ys=padded_ys,
                 box_size=moment_stamp_size,
             )
+        )
+
+        # Process all detections in batch
+        obj_ids = jnp.arange(1, max_objects + 1, dtype=jnp.int64)
+
+        def process_detection(
+            subobs, obj_id, obj_x, obj_y, bmask_flag, mfrac_val, det_flag_val
         ):
-            # Process single detection and get PyTree result
-            single_result = jax_fit_single_detection(
+            return jax_fit_single_detection(
                 mbobs=subobs[0][0],
                 psf_res=psf_res,
-                obj_id=ind + 1,
-                obj_x=obj["x"] - pad_width,  # location in original img
-                obj_y=obj["y"] - pad_width,
+                obj_id=obj_id,
+                obj_x=obj_x,
+                obj_y=obj_y,
                 shear_idx=shear_idx,
-                bmask_flag=bmask_flags[ind],
-                mfrac_val=mfrac_vals[ind],
+                bmask_flag=bmask_flag,
+                mfrac_val=mfrac_val,
+                det_flag=det_flag_val,
             )
-            all_detection_results.append(single_result)
 
-    # Stack all detection results into arrays
-    dfmdet_res = stack_detection_results(all_detection_results)
+        # Vectorize
+        batch_results = jax.vmap(process_detection)(
+            all_subobs,
+            obj_ids,
+            padded_xs_out - pad_width,
+            padded_ys_out - pad_width,
+            bmask_flags,
+            mfrac_vals,
+            det_flag,
+        )
+
+        all_detection_results.append(batch_results)
+
+    # Concatenate all batched results at once
+    dfmdet_res = jax.tree_util.tree_map(
+        lambda *arrays: jnp.concatenate(arrays), *all_detection_results
+    )
 
     # Convert mdet_step_idx integers to string labels to match original format
     # TODO: check if the string can be returned directly

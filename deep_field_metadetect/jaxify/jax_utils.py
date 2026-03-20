@@ -140,7 +140,16 @@ def jax_fit_gauss_mom_obs_and_psf(obs, fwhm=1.2, psf_res=None):
 
 @jax.jit
 def jax_fit_single_detection(
-    mbobs, psf_res, obj_id, obj_x, obj_y, shear_idx, bmask_flag, mfrac_val, fwhm=1.2
+    mbobs,
+    psf_res,
+    obj_id,
+    obj_x,
+    obj_y,
+    shear_idx,
+    bmask_flag,
+    mfrac_val,
+    det_flag,
+    fwhm=1.2,
 ):
     """Process a single detection and return results as a PyTree.
 
@@ -165,6 +174,8 @@ def jax_fit_single_detection(
         Bit mask flag value at detection position.
     mfrac_val : float
         Masked fraction value at detection position.
+    det_flag : int
+        Detection flag (0 = actual detection, 1 = fill value).
     fwhm : float, optional
         The FWHM of the Gaussian to use in the fit. Default is 1.2.
 
@@ -178,6 +189,7 @@ def jax_fit_single_detection(
         - mdet_step_idx: shear step index
         - bmask_flags: bit mask flags
         - mfrac: masked fraction
+        - det_flag: detection flag (0 = actual, 1 = fill)
         - wmom_flags: weighted moments fit flags
         - wmom_g1: first ellipticity component
         - wmom_g2: second ellipticity component
@@ -196,6 +208,7 @@ def jax_fit_single_detection(
         "mdet_step_idx": jnp.array(shear_idx, dtype=jnp.int32),
         "bmask_flags": jnp.array(bmask_flag, dtype=jnp.int32),
         "mfrac": jnp.array(mfrac_val, dtype=jnp.float_),
+        "det_flag": jnp.array(det_flag, dtype=jnp.int32),
         "wmom_flags": fres["wmom_flags"],
         "wmom_g1": fres["wmom_g1"],
         "wmom_g2": fres["wmom_g2"],
@@ -203,38 +216,3 @@ def jax_fit_single_detection(
         "wmom_psf_T": fres["wmom_psf_T"],
         "wmom_s2n": fres["wmom_s2n"],
     }
-
-
-def stack_detection_results(results_list):
-    """Stack a list of single detection PyTree results into arrays.
-
-    Parameters
-    ----------
-    results_list : list of dict
-        List of detection results from jax_fit_single_detection.
-
-    Returns
-    -------
-    stacked_results : dict
-        Dictionary with same keys as input, but values are 1D arrays
-        with shape (n_detections,) instead of scalars.
-    """
-    if not results_list:
-        # Return empty arrays if no detections
-        return {
-            "id": jnp.array([], dtype=jnp.int64),
-            "x": jnp.array([], dtype=jnp.float_),
-            "y": jnp.array([], dtype=jnp.float_),
-            "mdet_step_idx": jnp.array([], dtype=jnp.int32),
-            "bmask_flags": jnp.array([], dtype=jnp.int32),
-            "mfrac": jnp.array([], dtype=jnp.float_),
-            "wmom_flags": jnp.array([], dtype=jnp.int32),
-            "wmom_g1": jnp.array([], dtype=jnp.float64),
-            "wmom_g2": jnp.array([], dtype=jnp.float64),
-            "wmom_T_ratio": jnp.array([], dtype=jnp.float64),
-            "wmom_psf_T": jnp.array([], dtype=jnp.float64),
-            "wmom_s2n": jnp.array([], dtype=jnp.float64),
-        }
-
-    # Stack all results using jax.tree_map
-    return jax.tree_util.tree_map(lambda *arrays: jnp.stack(arrays), *results_list)

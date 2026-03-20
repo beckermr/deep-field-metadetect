@@ -658,3 +658,82 @@ def jax_generate_mbobs_for_detections(
             },
             DFMdetMultiBandObsList(sub_obs_lists),
         )
+
+
+@partial(jax.jit, static_argnames=["box_size"])
+def jax_batch_generate_mbobs_for_detections(
+    mbobs: DFMdetMultiBandObsList,
+    xs: jnp.ndarray,
+    ys: jnp.ndarray,
+    box_size: int = 48,
+    ids: jnp.ndarray = None,
+):
+    """Fully JIT-able batch version using scan to process all detections.
+
+    This function uses JAX's scan to sequentially extract sub-observations
+    for all detected objects in a memory-efficient way.
+
+    Parameters
+    ----------
+    mbobs : DFMdetMultiBandObsList
+        The multi-band observations to generate sub-mbobs from.
+        Must be already converted using jax_get_mb_obs() with appropriate padding.
+    xs : jnp.ndarray
+        Array of x positions of the objects (shape: [n_objects]).
+        Should include padding offset if mbobs is padded.
+    ys : jnp.ndarray
+        Array of y positions of the objects (shape: [n_objects]).
+        Should include padding offset if mbobs is padded.
+    box_size : int, optional
+        The size of the sub-boxes around the objects. Default is 48.
+    ids : jnp.ndarray, optional
+        Array of object IDs. If None, uses indices 0, 1, 2, ...
+
+    Returns
+    -------
+    tuple of (ids, xs, ys, all_subobs)
+        ids : jnp.ndarray
+            Array of object IDs (shape: [n_objects])
+        xs : jnp.ndarray
+            Array of x positions (shape: [n_objects])
+        ys : jnp.ndarray
+            Array of y positions (shape: [n_objects])
+        all_subobs : DFMdetMultiBandObsList
+            Sub-mbobs for all detections, with leading dimension matching n_objects.
+
+    Notes
+    -----
+    This uses scan to process all detections sequentially in a JIT-compiled loop,
+    which is more memory-efficient than vmap for large numbers of detections.
+    """
+
+    def extract_single_detection(x, y):
+        """Extract sub-observations for a single detection across all bands."""
+        sub_obs_lists = []
+        for obslist in mbobs:
+            sub_obs_list = []
+            for obs in obslist:
+                sub_obs = _get_subobs_jax(obs, x, y, box_size)
+                sub_obs_list.append(sub_obs)
+            sub_obs_lists.append(DFMdetObsList(sub_obs_list))
+
+        return DFMdetMultiBandObsList(sub_obs_lists)
+
+    num_objects = xs.shape[0]
+    if ids is None:
+        ids = jnp.arange(num_objects)
+
+    def scan_fn(carry, xy):
+        """Process one detection given (x, y) coordinates."""
+        x, y = xy
+        subobs = extract_single_detection(x, y)
+        return carry, subobs
+
+    xy_pairs = jnp.stack([xs, ys], axis=1)
+
+    # Use scan to iterate through all detections
+    # TODO: see memory vs speed trade off on using vmap
+    _, all_subobs = jax.lax.scan(scan_fn, None, xy_pairs)
+
+    # Return arrays directly (no Python conversion inside JIT)
+    return ids, xs, ys, all_subobs
