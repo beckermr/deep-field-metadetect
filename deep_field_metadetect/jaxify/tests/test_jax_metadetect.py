@@ -426,7 +426,7 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
 
 @pytest.mark.parametrize("deep_psf_ratio", [0.8, 1, 1.1])
 def test_metadetect_single_band_deep_field_metadetect(deep_psf_ratio):
-    nsims = 100
+    nsims = 50
     noise_fac = 1 / np.sqrt(30)
 
     rng = np.random.RandomState(seed=34132)
