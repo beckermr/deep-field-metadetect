@@ -779,7 +779,7 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
         reconv_psf_dk=reconv_psf_dk,
         reconv_psf_kim_size=reconv_psf_kim_size,
     )  # Note at this point we should already have the reconv_psf
-    # but reconv_psd_df and reconv_psf_kim_size is passed to prevent
+    # but reconv_psf_dk and reconv_psf_kim_size is passed to prevent
     # accidental rejitting of the function
 
     # now add in noise corr to make it match the wide noise
