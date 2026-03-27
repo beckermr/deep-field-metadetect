@@ -155,7 +155,7 @@ def single_band_deep_field_metadetect(
                 + tuple(fres[0])
             )
             if debug_verbose:
-                print(str(ind) + "non-jax tuple:" + str(tuple(fres[0])))
+                print(str(ind) + " non-jax tuple:", tuple(fres[0]))
 
     total_dtype = [
         ("id", "i8"),
