@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 import ngmix
@@ -479,9 +481,8 @@ def get_ratio_error(a, b, var_a, var_b, cov_ab):
 
 @jax.tree_util.register_pytree_node_class
 class GaussMom:
-    def __init__(self, fwhm: float, with_higher_order: bool = False):
+    def __init__(self, fwhm: float):
         self.fwhm = fwhm
-        self.with_higher_order = with_higher_order
 
     def _set_mompars(self, gaussmom_obs: GaussMomObs):
         T = _fwhm_to_T(self.fwhm)
@@ -493,8 +494,8 @@ class GaussMom:
 
         return wt_noimage / wt_norm
 
-    @jax.jit
-    def go(self, gaussmom_obs, maxrad=0.0) -> GaussMomData:
+    @partial(jax.jit, static_argnames=["with_higher_order"])
+    def go(self, gaussmom_obs, maxrad=0.0, with_higher_order=False) -> GaussMomData:
         def compute_maxrad(_):
             T = _fwhm_to_T(fwhm=self.fwhm)
             sigma = jnp.sqrt(T / 2)
@@ -513,15 +514,17 @@ class GaussMom:
         res = self._measure_moments(
             gaussmom_obs=gaussmom_obs,
             maxrad=maxrad,
+            with_higher_order=with_higher_order,
         )
         return res
 
     def _measure_moments(
-        self, gaussmom_obs: GaussMomObs, maxrad: float
+        self, gaussmom_obs: GaussMomObs, maxrad: float, with_higher_order: bool = False
     ) -> GaussMomData:
         res = self.get_weighted_moments(
             gaussmom_obs=gaussmom_obs,
             maxrad=maxrad,
+            with_higher_order=with_higher_order,
         )
 
         area = gaussmom_obs.area
@@ -541,7 +544,7 @@ class GaussMom:
         return res
 
     def get_weighted_moments(
-        self, gaussmom_obs: GaussMomObs, maxrad: float
+        self, gaussmom_obs: GaussMomObs, maxrad: float, with_higher_order: bool = False
     ) -> GaussMomData:
         """
         Get weighted moments using this mixture as the weight, including
@@ -557,6 +560,9 @@ class GaussMom:
             see deepfield_meta_detect.gaussmom.GaussMomObs
         maxrad: float, optional
             If sent, limit moments to within the specified maximum radius
+        with_higher_order: bool, optional
+            If True, compute higher order moments. Default is False.
+            Note: this has not been implimented yet.
 
         Returns
         -------
@@ -564,7 +570,7 @@ class GaussMom:
             results
         """
 
-        if self.with_higher_order:
+        if with_higher_order:
             raise ValueError("Not yet implimented")
 
         sums, sums_cov, wsum, npix = self.get_weighted_sums(
@@ -652,12 +658,12 @@ class GaussMom:
 
     def tree_flatten(self):
         children = (self.fwhm,)
-        aux_data = {"with_higher_order": self.with_higher_order}
+        aux_data = {}
         return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         (fwhm,) = children
-        obj = cls(fwhm=fwhm, with_higher_order=aux_data["with_higher_order"])
+        obj = cls(fwhm=fwhm)
 
         return obj
