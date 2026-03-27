@@ -125,7 +125,7 @@ def single_band_deep_field_metadetect(
         obs = mcal_res[shear]
         detres = run_detection_sep(obs, nodet_flags=nodet_flags)
         if debug_verbose:
-            print("num detections : " + str(len(detres["catalog"]["x"])))
+            print("num detections:", len(detres["catalog"]["x"]))
         ixc = (detres["catalog"]["x"] + 0.5).astype(int)
         iyc = (detres["catalog"]["y"] + 0.5).astype(int)
         bmask_flags = obs.bmask[iyc, ixc]
