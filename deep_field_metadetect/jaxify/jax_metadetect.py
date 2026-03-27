@@ -126,21 +126,21 @@ def jax_single_band_deep_field_metadetect(
 
     Returns
     -------
-    dfmdet_res : dict
-        The deep-field metadetection results as a dictionary containing
-        detection and measurement results for all shears. Keys include:
-        - id, x, y, mdet_step, bmask_flags, mfrac
-        - wmom_flags, wmom_g1, wmom_g2, wmom_T_ratio, wmom_psf_T, wmom_s2n
-        Each value is a 1D array with shape (n_total_detections,).
-        Note: mdet_step is a NumPy string array ('U7'), all others are JAX arrays.
-    mcal_res : dict
-        The metacalibration results.
-    detections : list
-        List of detection catalogs for each shear.
+    result : dict
+        A dictionary containing the requested results with the following keys:
 
-    Note: If return_k_info is set to True for debugging,
-    the function returns a tuple containing ((dfmdet_res, kinfo), mcal_res, detections).
-    kinfo: (_force_stepk_field, _force_maxk_field, _force_stepk_psf, _force_maxk_psf)
+        - "dfmdet_res" : dict (always present)
+            The deep-field metadetection results as a dictionary containing
+            detection and measurement results for all shears. Keys include:
+            - id, x, y, mdet_step, bmask_flags, mfrac
+            - wmom_flags, wmom_g1, wmom_g2, wmom_T_ratio, wmom_psf_T, wmom_s2n
+        - "kinfo" : tuple (only if return_k_info=True)
+            Tuple containing (_force_stepk_field, _force_maxk_field,
+            _force_stepk_psf, _force_maxk_psf).
+        - "mcal_res" : dict (only if return_debug_info=True)
+            The metacalibration results.
+        - "detections" : list (only if return_debug_info=True)
+            List of detection catalogs for each shear.
     """
     if shears is None:
         shears = DEFAULT_SHEARS
@@ -330,13 +330,13 @@ def jax_single_band_deep_field_metadetect(
     dfmdet_res["mdet_step"] = mdet_step_strings
     del dfmdet_res["mdet_step_idx"]
 
-    if return_debug_info:
-        if return_k_info:
-            return (dfmdet_res, kinfo), mcal_res, detections
-
-        return dfmdet_res, mcal_res, detections
+    result = {"dfmdet_res": dfmdet_res}
 
     if return_k_info:
-        return (dfmdet_res, kinfo)
+        result["kinfo"] = kinfo
 
-    return dfmdet_res
+    if return_debug_info:
+        result["mcal_res"] = mcal_res
+        result["detections"] = detections
+
+    return result

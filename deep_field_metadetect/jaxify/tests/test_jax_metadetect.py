@@ -64,7 +64,7 @@ def _run_single_sim(
         reconv_psf_kim_size=kim_size,
         use_sep=True,
     )
-    return measure_mcal_shear_quants(res)
+    return measure_mcal_shear_quants(res["dfmdet_res"])
 
 
 def _run_sim_pair(seed, s2n, deep_noise_fac, deep_psf_fac, skip_wide, skip_deep):
@@ -140,9 +140,9 @@ def _run_single_sim_jax_and_ngmix(
         fft_size=DEFAULT_FFT_SIZE,
     )
 
-    res_ngmix = non_jax_results[0]
+    res_ngmix = non_jax_results["dfmdet_res"]
     (force_stepk_field, force_maxk_field, force_stepk_psf, force_maxk_psf) = (
-        non_jax_results[1]
+        non_jax_results["kinfo"]
     )
 
     results = jax_single_band_deep_field_metadetect(
@@ -164,8 +164,8 @@ def _run_single_sim_jax_and_ngmix(
         use_sep=True,
     )
 
-    res = results[0]
-    kinfo = results[1]
+    res = results["dfmdet_res"]
+    kinfo = results["kinfo"]
 
     assert kinfo[0] == force_stepk_field
     assert kinfo[1] == force_maxk_field
@@ -319,7 +319,7 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
         skip_obs_deep_corrections=False,
         reconv_psf_dk=dk,
         reconv_psf_kim_size=kim_size,
-    )
+    )["dfmdet_res"]
 
     xc = (res["x"] + 0.5).astype(int)
     yc = (res["y"] + 0.5).astype(int)
@@ -371,7 +371,7 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
         skip_obs_deep_corrections=False,
         reconv_psf_dk=dk,
         reconv_psf_kim_size=kim_size,
-    )
+    )["dfmdet_res"]
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] == "noshear")
     assert np.all(res["mfrac"][msk] >= 0.5)
@@ -414,7 +414,7 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
         skip_obs_deep_corrections=False,
         reconv_psf_dk=dk,
         reconv_psf_kim_size=kim_size,
-    )
+    )["dfmdet_res"]
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] != "noshear")
     assert np.all(res["mfrac"][msk] >= 0.5)

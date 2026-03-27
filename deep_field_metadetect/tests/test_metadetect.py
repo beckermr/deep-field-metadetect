@@ -52,7 +52,7 @@ def _run_single_sim(
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
     )
-    return measure_mcal_shear_quants(res)
+    return measure_mcal_shear_quants(res["dfmdet_res"])
 
 
 def _run_sim_pair(seed, s2n, deep_noise_fac, deep_psf_fac, skip_wide, skip_deep):
@@ -109,7 +109,7 @@ def test_metadetect_single_band_deep_field_metadetect_bmask():
         obs_dn,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
-    )
+    )["dfmdet_res"]
 
     xc = (res["x"] + 0.5).astype(int)
     yc = (res["y"] + 0.5).astype(int)
@@ -146,7 +146,7 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_wide():
         obs_dn,
         skip_obs_wide_corrections=False,
         skip_obs_deep_corrections=False,
-    )
+    )["dfmdet_res"]
 
     msk = (res["wmom_flags"] == 0) & (res["mdet_step"] == "noshear")
     assert np.all(res["mfrac"][msk] >= 0.5)
@@ -184,8 +184,8 @@ def test_metadetect_single_band_deep_field_metadetect_mfrac_deep():
         force_maxk_psf=12.640001692177682,
     )
 
-    res = results[0]
-    kinfo = results[1]
+    res = results["dfmdet_res"]
+    kinfo = results["kinfo"]
 
     assert kinfo[0] == 0.12403490725241548
     assert kinfo[1] == 8.160777791551611
