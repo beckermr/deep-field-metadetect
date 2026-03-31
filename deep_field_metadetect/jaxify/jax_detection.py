@@ -660,13 +660,14 @@ def jax_generate_mbobs_for_detections(
         )
 
 
-@partial(jax.jit, static_argnames=["box_size"])
+@partial(jax.jit, static_argnames=["box_size", "unroll"])
 def jax_batch_generate_mbobs_for_detections(
     mbobs: DFMdetMultiBandObsList,
     xs: jnp.ndarray,
     ys: jnp.ndarray,
     box_size: int = 48,
     ids: jnp.ndarray = None,
+    unroll: int = 4,
 ):
     """Fully JIT-able batch version using scan to process all detections.
 
@@ -688,6 +689,10 @@ def jax_batch_generate_mbobs_for_detections(
         The size of the sub-boxes around the objects. Default is 48.
     ids : jnp.ndarray, optional
         Array of object IDs. If None, uses indices 0, 1, 2, ...
+    unroll : int, optional
+        Controls loop unrolling in scan for memory vs speed tradeoff.
+        - Default: 4
+        - Higher values: Faster but use more memory (like vmap)
 
     Returns
     -------
@@ -701,10 +706,6 @@ def jax_batch_generate_mbobs_for_detections(
         all_subobs : DFMdetMultiBandObsList
             Sub-mbobs for all detections, with leading dimension matching n_objects.
 
-    Notes
-    -----
-    This uses scan to process all detections sequentially in a JIT-compiled loop,
-    which is more memory-efficient than vmap for large numbers of detections.
     """
 
     def extract_single_detection(x, y):
@@ -732,8 +733,8 @@ def jax_batch_generate_mbobs_for_detections(
     xy_pairs = jnp.stack([xs, ys], axis=1)
 
     # Use scan to iterate through all detections
-    # TODO: see memory vs speed trade off on using vmap
-    _, all_subobs = jax.lax.scan(scan_fn, None, xy_pairs)
+    # Use unroll parameter to control memory vs speed tradeoff
+    _, all_subobs = jax.lax.scan(scan_fn, None, xy_pairs, unroll=unroll)
 
     # Return arrays directly (no Python conversion inside JIT)
     return ids, xs, ys, all_subobs
