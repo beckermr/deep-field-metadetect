@@ -10,7 +10,9 @@ DEFAULT_FFT_SIZE = 256
 DEAFAULT_COADD_SIZE = 201
 DEFAULT_NUMBER_DENSITY = 50.0  # objects per square arcminute
 
-DEFAULT_RECONV_DK = compute_dk(pixel_scale=0.2, image_size=DEFAULT_NXY_PSF)
+DEFAULT_RECONV_DK = compute_dk(
+    pixel_scale=DEFAULT_PIXEL_SCALE, image_size=DEFAULT_NXY_PSF
+)
 DEFAULT_KIM_SIZE = compute_kim_size(image_size=DEFAULT_NXY_PSF)
 
 MAX_OBJECTS = compute_max_objects(
