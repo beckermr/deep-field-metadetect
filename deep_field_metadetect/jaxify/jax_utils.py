@@ -46,6 +46,33 @@ def compute_kim_size(image_size):
     return int(target_size)
 
 
+def compute_max_objects(field_size, pixel_scale, number_density):
+    """Compute the maximum number of objects in a field given number density.
+
+    Parameters:
+    -----------
+    field_size : int
+        The dimension of the square field in pixels.
+    pixel_scale : float
+        Pixel scale in arcseconds per pixel.
+    number_density : float
+        Expected number density of objects per square arcminute.
+
+    Returns:
+    --------
+    int
+        The estimated maximum number of objects in the field.
+
+    """
+
+    field_size_arcmin = (field_size * pixel_scale) / 60.0
+    total_area_arcmin2 = field_size_arcmin**2
+
+    max_objects = int(number_density * total_area_arcmin2)
+
+    return max_objects
+
+
 @jax.jit
 def jax_fit_gauss_mom_obs(obs, fwhm=1.2):
     """Fit an DFMdetObservation/DFMdetPSF with Gaussian moments.
