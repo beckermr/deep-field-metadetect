@@ -175,7 +175,7 @@ def jax_fit_single_detection(
     mfrac_val : float
         Masked fraction value at detection position.
     det_flag : int
-        Detection flag (0 = actual detection, 1 = fill value).
+        Detection flag (1 = actual detection, 0 = fill value).
     fwhm : float, optional
         The FWHM of the Gaussian to use in the fit. Default is 1.2.
 
@@ -189,7 +189,7 @@ def jax_fit_single_detection(
         - mdet_step_idx: shear step index
         - bmask_flags: bit mask flags
         - mfrac: masked fraction
-        - det_flag: detection flag (0 = actual, 1 = fill)
+        - det_flag: detection flag (1 = actual, 0 = fill)
         - wmom_flags: weighted moments fit flags
         - wmom_g1: first ellipticity component
         - wmom_g2: second ellipticity component

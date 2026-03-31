@@ -79,7 +79,7 @@ def peak_finder(
         Invalid entries filled with (-1, -1)
     det_flag : jnp.ndarray
         Integer array of shape (max_objects,) where:
-        0 = actual detection, 1 = fill value
+        1 = actual detection, 0 = fill value
     """
     local_max_mask = local_maxima_filter(
         image=image,
@@ -89,9 +89,9 @@ def peak_finder(
 
     positions = jnp.argwhere(local_max_mask, size=max_objects, fill_value=(-1, -1))
 
-    # Create detection flag: 0 for actual detections, 1 for fill values
+    # Create detection flag: 1 for actual detections, 0 for fill values
     # Fill values have (-1, -1) coordinates
-    det_flag = jnp.all(positions == -1, axis=1).astype(jnp.int32)
+    det_flag = (~jnp.all(positions == -1, axis=1)).astype(jnp.int32)
 
     return positions, det_flag
 
@@ -122,9 +122,9 @@ def refine_centroid(
     jnp.ndarray
         Refined peak coordinates (refined_y, refined_x) : float
         Note: original coordinates are returned if refinement is skipped
-    refinement_flag : bool
-        True (1) if refinement was skipped (near border or large shift),
-        False (0) if refinement was applied
+    refinement_flag : int
+        1 if refinement was applied,
+        0 if refinement was skipped (near border or large shift)
     """
     half_window = window_size // 2
     height, width = image.shape
@@ -138,7 +138,7 @@ def refine_centroid(
     )
 
     def border_case():
-        return jnp.array([peak[0], peak[1]], dtype=jnp.float_), True
+        return jnp.array([peak[0], peak[1]], dtype=jnp.float_), 0
 
     def normal_case():
         window = jax.lax.dynamic_slice(
@@ -168,10 +168,10 @@ def refine_centroid(
             # Clip coordinates to be within valid image bounds
             refined_y = jnp.clip(refined_y, 0.0, height - 1.0)
             refined_x = jnp.clip(refined_x, 0.0, width - 1.0)
-            return jnp.array([refined_y, refined_x], dtype=jnp.float_), False
+            return jnp.array([refined_y, refined_x], dtype=jnp.float_), 1
 
         def skip_shift():
-            return jnp.array([peak[0], peak[1]], dtype=jnp.float_), True
+            return jnp.array([peak[0], peak[1]], dtype=jnp.float_), 0
 
         return jax.lax.cond(shift_too_large, skip_shift, apply_shift)
 
@@ -193,7 +193,7 @@ def refine_centroid_in_cell(
     refined_positions : jnp.ndarray
         Array of refined coordinates
     refinement_flags : jnp.ndarray
-        Array of flags (1 if refinement skipped, 0 if applied)
+        Array of flags (1 if refinement applied, 0 if skipped)
     """
     return jax.vmap(refine_centroid, in_axes=(None, 0, None))(
         image, peak_positions, window_size
@@ -235,11 +235,11 @@ def detect_galaxies(
         Array of detected galaxy centers (y, x) after centroid refinement.
         Returns the refined floating point values of the center.
     refinement_flags : jnp.ndarray
-        Array indicating which objects had refinement skipped (shape max_objects,)
-        1 = refinement skipped (near border or large shift), 0 = refinement applied
+        Array indicating which objects had refinement applied (shape max_objects,)
+        1 = refinement applied, 0 = refinement skipped (near border or large shift)
     det_flag : jnp.ndarray
         Integer array of shape (max_objects,) where:
-        0 = actual detection, 1 = fill value
+        1 = actual detection, 0 = fill value
     """
     peak_positions, det_flag = peak_finder(
         image=image,
@@ -249,7 +249,7 @@ def detect_galaxies(
     )
 
     if not refine_centroids:
-        refinement_flags = jnp.zeros(max_objects, dtype=bool)
+        refinement_flags = jnp.zeros(max_objects, dtype=jnp.int32)
         return peak_positions, peak_positions.astype(float), refinement_flags, det_flag
 
     refined_positions, refinement_flags = refine_centroid_in_cell(

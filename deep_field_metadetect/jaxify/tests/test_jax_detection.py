@@ -187,7 +187,7 @@ def test_gaussian_centroid_refinement():
     )
 
     assert refined_distance < initial_distance
-    assert not refinement_flag
+    assert refinement_flag == 1
 
 
 def test_near_border():
@@ -202,7 +202,7 @@ def test_near_border():
     refined_pos, refinement_flag = refine_centroid(image, (4, 4), window_size=5)
 
     assert (refined_pos[0] == 4) & (refined_pos[1] == 4)  # refined is same as input
-    assert refinement_flag
+    assert refinement_flag == 0
 
 
 def test_noisy_region_refinement_skip():
@@ -228,7 +228,7 @@ def test_noisy_region_refinement_skip():
 
     # The refinement should be skipped because the proposed shift would be > 1 pixel
     # due to the asymmetric noise pattern
-    assert refinement_flag, "Refinement should be skipped (flag=1) for large shift"
+    assert refinement_flag == 0, "Refinement should be skipped (flag=0) for large shift"
     # Coordinates should remain unchanged
     assert refined_pos[0] == peak_y and refined_pos[1] == peak_x, (
         "Position should not change when refinement is skipped"
@@ -417,19 +417,19 @@ def test_det_flag():
         image, noise=noise, window_size=5, max_objects=max_objects
     )
 
-    # First 3 should be actual detections (det_flag=0)
-    assert jnp.sum(det_flag == 0) == 3, "Should have 3 actual detections"
-    assert jnp.sum(det_flag == 1) == 7, "Should have 7 fill values"
+    # First 3 should be actual detections (det_flag=1)
+    assert jnp.sum(det_flag == 1) == 3, "Should have 3 actual detections"
+    assert jnp.sum(det_flag == 0) == 7, "Should have 7 fill values"
 
     # Verify that actual detections have valid positions
-    actual_detections = positions[det_flag == 0]
+    actual_detections = positions[det_flag == 1]
     for pos in actual_detections:
         assert pos[0] >= 0 and pos[1] >= 0, (
             "Actual detections should have valid positions"
         )
 
     # Verify that fill values have (-1, -1) positions
-    fill_positions = positions[det_flag == 1]
+    fill_positions = positions[det_flag == 0]
     for pos in fill_positions:
         assert jnp.array_equal(pos, jnp.array([-1, -1])), (
             "Fill values should be (-1, -1)"
@@ -445,10 +445,10 @@ def test_det_flag():
     )
 
     # Should have same det_flag pattern
-    assert jnp.sum(det_flag_full == 0) == 3, (
+    assert jnp.sum(det_flag_full == 1) == 3, (
         "detect_galaxies should have 3 actual detections"
     )
-    assert jnp.sum(det_flag_full == 1) == 7, "detect_galaxies should have 7 fill values"
+    assert jnp.sum(det_flag_full == 0) == 7, "detect_galaxies should have 7 fill values"
 
     # Verify consistency between det_flag and positions
     assert jnp.all(det_flag == det_flag_full), "det_flag should be consistent"
@@ -465,8 +465,8 @@ def test_det_flag_no_detections():
         image, noise=noise, window_size=5, max_objects=max_objects
     )
 
-    # All should be fill values (det_flag=1)
-    assert jnp.all(det_flag == 1), (
+    # All should be fill values (det_flag=0)
+    assert jnp.all(det_flag == 0), (
         "All entries should be fill values when no detections"
     )
     assert jnp.all(positions == -1), (
@@ -489,6 +489,6 @@ def test_det_flag_max_detections():
         image, noise=noise, window_size=5, max_objects=max_objects
     )
 
-    # All should be actual detections (det_flag=0)
-    assert jnp.all(det_flag == 0), "All entries should be actual detections"
+    # All should be actual detections (det_flag=1)
+    assert jnp.all(det_flag == 1), "All entries should be actual detections"
     assert jnp.all(positions[:, 0] >= 0), "All positions should be valid"

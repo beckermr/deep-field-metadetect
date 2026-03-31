@@ -184,7 +184,7 @@ def jax_single_band_deep_field_metadetect(
                 # Truncate if we have more detections than max_objects
                 x_coords = jnp.array(detres["catalog"]["x"][:max_objects])
                 y_coords = jnp.array(detres["catalog"]["y"][:max_objects])
-                det_flag = jnp.zeros(max_objects, dtype=jnp.int32)
+                det_flag = jnp.ones(max_objects, dtype=jnp.int32)
             else:
                 # Pad to max_objects with fill values
                 x_coords = jnp.concatenate(
@@ -201,8 +201,8 @@ def jax_single_band_deep_field_metadetect(
                 )
                 det_flag = jnp.concatenate(
                     [
-                        jnp.zeros(num_detections, dtype=jnp.int32),
-                        jnp.ones(max_objects - num_detections, dtype=jnp.int32),
+                        jnp.ones(num_detections, dtype=jnp.int32),
+                        jnp.zeros(max_objects - num_detections, dtype=jnp.int32),
                     ]
                 )
 
@@ -231,7 +231,7 @@ def jax_single_band_deep_field_metadetect(
             _, detres, _, det_flag = detect_galaxies(
                 mcal_res[shear].image, noise=noise_level, max_objects=max_objects
             )
-            num_detections = jnp.sum(det_flag == 0).item()
+            num_detections = jnp.sum(det_flag == 1).item()
             if debug_verbose:
                 print("Num detections " + str(num_detections))
 
@@ -239,7 +239,7 @@ def jax_single_band_deep_field_metadetect(
             y_coords = detres[:, 0]
 
             # Compute bmask_flags only for actual detections
-            valid_mask = det_flag == 0
+            valid_mask = det_flag == 1
             ixc = jnp.where(valid_mask, (x_coords + 0.5).astype(int), 0)
             iyc = jnp.where(valid_mask, (y_coords + 0.5).astype(int), 0)
             bmask_flags = jnp.where(valid_mask, mcal_res[shear].bmask[iyc, ixc], 0)
@@ -257,7 +257,7 @@ def jax_single_band_deep_field_metadetect(
                 x_coords, y_coords
             )
             # For fill values (-1, -1), the interpolation will not make
-            mfrac_vals = jnp.where(det_flag == 0, mfrac_vals, 0.0)
+            mfrac_vals = jnp.where(det_flag == 1, mfrac_vals, 0.0)
             return mfrac_vals
 
         def get_zero_mfrac():
