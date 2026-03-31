@@ -7,6 +7,8 @@ import ngmix
 import numpy as np
 from ngmix.observation import Observation
 
+from deep_field_metadetect.detect import DEFAULT_IMAGE_VALUES
+
 
 @jax.tree_util.register_pytree_node_class
 class DFMdetPSF:
@@ -488,17 +490,6 @@ class DFMdetMultiBandObsList:
     @classmethod
     def tree_unflatten(cls, meta, mb_obs_list):
         return cls(mb_obs_list, meta)
-
-
-# Constants for padding
-BMASK_EDGE = 2**30
-DEFAULT_IMAGE_VALUES = {
-    "image": 0.0,
-    "weight": 0.0,
-    "bmask": BMASK_EDGE,
-    "noise": 0.0,
-    "mfrac": 0.0,
-}
 
 
 @partial(jax.jit, static_argnames=["pad_width"])

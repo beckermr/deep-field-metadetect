@@ -5,8 +5,8 @@ import jax
 import jax.numpy as jnp
 import jax_galsim
 
+from deep_field_metadetect.detect import BMASK_EDGE
 from deep_field_metadetect.jaxify.observation import (
-    BMASK_EDGE,
     DFMdetMultiBandObsList,
     DFMdetObservation,
     DFMdetObsList,
