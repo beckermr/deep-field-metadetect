@@ -1,3 +1,5 @@
+import logging
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -25,6 +27,8 @@ from deep_field_metadetect.jaxify.observation import (
     jax_get_mb_obs,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def jax_single_band_deep_field_metadetect(
     obs_wide,
@@ -49,7 +53,6 @@ def jax_single_band_deep_field_metadetect(
     moment_stamp_size=48,
     use_sep=False,
     return_debug_info=False,
-    debug_verbose=False,
 ):
     """Run deep-field metadetection for a simple scenario of a single band
     with a single image per band using only post-PSF Gaussian weighted moments.
@@ -120,9 +123,6 @@ def jax_single_band_deep_field_metadetect(
         use sep for detection. Otherwise jax peak finder is used.
     return_debug_info: bool
         return detections and mcal_res for debugging
-    debug_verbose: bool
-        Prints results after detection.
-        Used for debugging.
 
     Returns
     -------
@@ -176,8 +176,7 @@ def jax_single_band_deep_field_metadetect(
             obs = dfmd_obs_to_ngmix_obs(mcal_res[shear])
             detres = run_detection_sep(obs, nodet_flags=nodet_flags, detect_thresh=3)
             num_detections = len(detres["catalog"]["x"])
-            if debug_verbose:
-                print("num detections : " + str(num_detections))
+            logger.debug("num detections: %d", num_detections)
 
             # Pad SEP detections to max_objects
             if num_detections > max_objects:
@@ -232,8 +231,7 @@ def jax_single_band_deep_field_metadetect(
                 mcal_res[shear].image, noise=noise_level, max_objects=max_objects
             )
             num_detections = jnp.sum(det_flag == 1).item()
-            if debug_verbose:
-                print("Num detections " + str(num_detections))
+            logger.debug("Num detections: %d", num_detections)
 
             x_coords = detres[:, 1]
             y_coords = detres[:, 0]
