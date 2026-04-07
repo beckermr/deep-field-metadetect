@@ -172,6 +172,6 @@ def dfmd_obs_to_gaussmom_obs(obs: DFMdetObservation) -> GaussMomObs:
         u,
         v,
         obs.image,
-        obs.wcs.dudx * obs.wcs.dvdy - obs.wcs.dudy * obs.wcs.dvdx,
+        jnp.abs(obs.wcs.dudx * obs.wcs.dvdy - obs.wcs.dudy * obs.wcs.dvdx),
         obs.weight,
     )
