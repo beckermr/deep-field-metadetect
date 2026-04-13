@@ -637,3 +637,52 @@ def jax_batch_generate_mbobs_for_detections(
 
     # Return arrays directly (no Python conversion inside JIT)
     return ids, xs, ys, all_subobs
+
+
+@partial(jax.jit, static_argnames=["detbands"])
+def jax_make_mb_coadd(obs_dict, detbands=None):
+    """Make a multiband coadd in the detection bands using JAX.
+
+    This method assumes the WCS is the same for all
+    images in the obs_dict.
+
+    Parameters
+    ----------
+    obs_dict : dict
+        Dictionary mapping band names to DFMdetObservation objects.
+    detbands : tuple of str, optional
+        A tuple of band names to use for the detection coadd.
+        If None, all bands in obs_dict are used.
+
+    Returns
+    -------
+    detobs : DFMdetObservation
+        The detection coadd as a DFMdetObservation.
+    """
+    if detbands is None:
+        detbands = tuple(obs_dict.keys())
+
+    first_obs = obs_dict[detbands[0]]
+    coadd_im = jnp.zeros_like(first_obs.image)
+    coadd_noise = jnp.zeros_like(first_obs.image)
+    mask = jnp.zeros(coadd_im.shape, dtype=jnp.int32)
+    total_weight = jnp.zeros_like(first_obs.image)
+
+    for band in detbands:
+        obs = obs_dict[band]
+        coadd_im = coadd_im + obs.image * obs.weight
+        coadd_noise = coadd_noise + obs.noise * obs.weight
+        total_weight = total_weight + obs.weight
+        mask = mask | obs.bmask
+
+    coadd_im = coadd_im / total_weight
+    coadd_noise = coadd_noise / total_weight
+    wgt = total_weight
+
+    return DFMdetObservation(
+        image=coadd_im,
+        weight=wgt,
+        bmask=mask,
+        noise=coadd_noise,
+        wcs=first_obs.wcs,
+    )
