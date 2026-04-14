@@ -11,6 +11,7 @@ from deep_field_metadetect.jaxify import jax_dfmd_defaults
 from deep_field_metadetect.jaxify.jax_detection import (
     detect_galaxies,
     jax_batch_generate_mbobs_for_detections,
+    jax_make_mb_coadd,
 )
 from deep_field_metadetect.jaxify.jax_metacal import (
     DEFAULT_SHEARS,
@@ -50,7 +51,7 @@ def jax_single_band_deep_field_metadetect(
     reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
     reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
     max_objects=jax_dfmd_defaults.MAX_OBJECTS,
-    moment_stamp_size=48,
+    moment_stamp_size=jax_dfmd_defaults.DEFAULT_MOMENT_STAMP_SIZE,
     use_sep=False,
     return_debug_info=False,
 ):
@@ -108,17 +109,18 @@ def jax_single_band_deep_field_metadetect(
         Used mainly to test against JaxGalsim.
     reconv_psf_dk: float
         The Fourier-space pixel scale used for reconv psf computation.
-        Default: jax_defaults.DEFAULT_RECONV_DK
+        Default: jax_dfmd_defaults.DEFAULT_RECONV_DK
     reconv_psf_kim_size: int
         k image size used for reconv psf computation
-        Default: jax_defaults.DEFAULT_KIM_SIZE
+        Default: jax_dfmd_defaults.DEFAULT_KIM_SIZE
     max_objects: int
         Max number of objects in a field
+        Default: jax_dfmd_defaults.MAX_OBJECTS
     moment_stamp_size: int, optional
         The size of the stamp (box_size) used for moment measurements.
         This determines the padding width (moment_stamp_size // 2) applied
         to observations before extracting sub-observations.
-        Default: 48.
+        Default: jax_dfmd_defaults.DEFAULT_MOMENT_STAMP_SIZE.
     use_sep: bool
         use sep for detection. Otherwise jax peak finder is used.
     return_debug_info: bool
@@ -335,6 +337,301 @@ def jax_single_band_deep_field_metadetect(
 
     if return_debug_info:
         result["mcal_res"] = mcal_res
+        result["detections"] = detections
+
+    return result
+
+
+def jax_multi_band_deep_field_metadetect(
+    obs_wide,
+    obs_deep,
+    obs_deep_noise,
+    nxy,
+    nxy_psf,
+    detbands=None,
+    step=DEFAULT_STEP,
+    shears=None,
+    skip_obs_wide_corrections=False,
+    skip_obs_deep_corrections=False,
+    return_k_info=False,
+    force_stepk_field=0.0,
+    force_maxk_field=0.0,
+    force_stepk_psf=0.0,
+    force_maxk_psf=0.0,
+    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
+    reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
+    max_objects=jax_dfmd_defaults.MAX_OBJECTS,
+    moment_stamp_size=jax_dfmd_defaults.DEFAULT_MOMENT_STAMP_SIZE,
+    return_debug_info=False,
+    debug_verbose=False,
+):
+    """Run deep-field metadetection for multi-band observations using JAX.
+
+    Parameters
+    ----------
+    obs_wide : dict
+        Dictionary of wide-field DFMdetObservation objects keyed by band name.
+    obs_deep : dict
+        Dictionary of deep-field DFMdetObservation objects keyed by band name.
+    obs_deep_noise : dict
+        Dictionary of deep-field noise DFMdetObservation objects keyed by band name.
+    nxy: int
+        Image size
+    nxy_psf: int
+        PSF size
+    detbands : tuple of str, optional
+        tuple of band names to use for detection. If None, all bands
+        in obs_wide are used for detection. Default is None.
+    step : float, optional
+        The step size for the metacalibration, by default DEFAULT_STEP.
+    shears : list, optional
+        The shears to use for the metacalibration, by default DEFAULT_SHEARS
+        if set to None.
+    skip_obs_wide_corrections : bool, optional
+        Skip the observation corrections for the wide-field observations,
+        by default False.
+    skip_obs_deep_corrections : bool, optional
+        Skip the observation corrections for the deep-field observations,
+        by default False.
+    nodet_flags : int, optional
+        The bmask flags marking area in the image to skip, by default 0.
+    return_k_info : bool, optional
+        return _force stepk and maxk values in the following order
+        _force_stepk_field, _force_maxk_field, _force_stepk_psf, _force_maxk_psf.
+        Used mainly for testing.
+    force_stepk_field : float, optional
+        Force stepk for drawing field images.
+        Defaults to 0.0, which lets JaxGalsim choose the value.
+        Used mainly for testing.
+    force_maxk_field: float, optional
+        Force maxk for drawing field images.
+        Defaults to 0.0, which lets JaxGalsim choose the value.
+        Used mainly for testing.
+    force_stepk_psf: float, optional
+        Force stepk for drawing PSF images.
+        Defaults to 0.0, which lets JaxGalsim choose the value.
+        Used mainly for testing.
+    force_maxk_psf: float, optional
+        Force stepk for drawing PSF images
+        Defaults to 0.0, which lets JaxGalsim choose the value.
+        Used mainly for testing.
+    fft_size: int, optional
+        To fix max and min values of FFT size.
+        Default: jax_dfmd_defaults.DEFAULT_FFT_SIZE
+    reconv_psf_dk: float
+        The Fourier-space pixel scale used for reconv psf computation.
+        Default: jax_dfmd_defaults.DEFAULT_RECONV_DK
+    reconv_psf_kim_size: int
+        k image size used for reconv psf computation
+        Default: jax_dfmd_defaults.DEFAULT_KIM_SIZE
+    max_objects: int
+        Max number of objects in a field
+        Default: jax_dfmd_defaults.MAX_OBJECTS
+    moment_stamp_size: int, optional
+        The size of the stamp (box_size) used for moment measurements.
+        This determines the padding width (moment_stamp_size // 2) applied
+        to observations before extracting sub-observations.
+        Default: jax_dfmd_defaults.DEFAULT_MOMENT_STAMP_SIZE.
+    return_debug_info: bool
+        return detections and mcal_res for debugging
+    debug_verbose: bool
+        Prints results after detection.
+        Used for debugging.
+
+    Returns
+    -------
+    result : dict
+        A dictionary containing the requested results with the following keys:
+
+        - "dfmdet_res" : dict (always present)
+            The deep-field metadetection results as a dictionary containing
+            detection and measurement results for all shears and all bands.
+            Keys include:
+            - id, x, y, mdet_step, band, bmask_flags, mfrac
+            - wmom_flags, wmom_g1, wmom_g2, wmom_T_ratio, wmom_psf_T, wmom_s2n
+            - "kinfo" : tuple (only if return_k_info=True)
+            Tuple containing (_force_stepk_field, _force_maxk_field,
+            _force_stepk_psf, _force_maxk_psf).
+        - "mcal_res" : dict (only if return_debug_info=True)
+            The metacalibration results for each band, keyed by band name.
+        - "detections" : list (only if return_debug_info=True)
+            List of detection catalogs for each shear.
+    """
+    bands = tuple(obs_wide.keys())
+
+    if shears is None:
+        shears = DEFAULT_SHEARS
+
+    if detbands is None:
+        detbands = bands
+
+    # shear images for each band
+    mcal_res_by_band = {}
+    kinfo = {}
+    for band in bands:
+        mcal_res = jax_metacal_wide_and_deep_psf_matched(
+            obs_wide=obs_wide[band],
+            obs_deep=obs_deep[band],
+            obs_deep_noise=obs_deep_noise[band],
+            nxy=nxy,
+            nxy_psf=nxy_psf,
+            step=step,
+            shears=shears,
+            skip_obs_wide_corrections=skip_obs_wide_corrections,
+            skip_obs_deep_corrections=skip_obs_deep_corrections,
+            return_k_info=return_k_info,
+            force_stepk_field=force_stepk_field,
+            force_maxk_field=force_maxk_field,
+            force_stepk_psf=force_stepk_psf,
+            force_maxk_psf=force_maxk_psf,
+            fft_size=fft_size,
+            reconv_psf_dk=reconv_psf_dk,
+            reconv_psf_kim_size=reconv_psf_kim_size,
+        )
+
+        if return_k_info:
+            mcal_res, kinfo[band] = mcal_res
+
+        mcal_res_by_band[band] = mcal_res
+
+    psf_res_by_band = {}
+    for band in bands:
+        psf_res_by_band[band] = jax_fit_gauss_mom_obs(
+            mcal_res_by_band[band]["noshear"].psf
+        )
+
+    # For each shear, create observation dict and run detection and measurements
+    all_detection_results = []
+    detections = []
+    for shear_idx, shear in enumerate(shears):
+        obs_dict = {band: mcal_res_by_band[band][shear] for band in bands}
+        detobs = jax_make_mb_coadd(obs_dict, detbands=detbands)
+
+        # Run detection
+        noise_level = jnp.std(detobs.noise)
+        _, detres, _, det_flag = detect_galaxies(
+            detobs.image, noise=noise_level, max_objects=max_objects
+        )
+        num_detections = jnp.sum(det_flag == 1).item()
+        if debug_verbose:
+            print(f"shear={shear}, num detections: {num_detections}")
+
+        x_coords = detres[:, 1]
+        y_coords = detres[:, 0]
+
+        # Compute bmask_flags only for actual detections
+        valid_mask = det_flag == 1
+        ixc = jnp.where(valid_mask, (x_coords + 0.5).astype(int), 0)
+        iyc = jnp.where(valid_mask, (y_coords + 0.5).astype(int), 0)
+        bmask_flags = jnp.where(valid_mask, detobs.bmask[iyc, ixc], 0)
+        detections.append(detres)
+
+        # Process measurements for each band for every detection
+        for iband, band in enumerate(bands):
+
+            def get_mfrac_values():
+                """Compute interpolated mfrac values."""
+                _interp_mfrac = jax_compute_mfrac_interp_image(
+                    mcal_res_by_band[band][shear].mfrac,
+                    mcal_res_by_band[band][shear].wcs.local(),
+                    fft_size=fft_size,
+                )
+
+                mfrac_vals = jax.vmap(lambda x, y: _interp_mfrac.xValue(x, y))(
+                    x_coords, y_coords
+                )
+                # For fill values (-1, -1), the interpolation will not make sense
+                mfrac_vals = jnp.where(det_flag == 1, mfrac_vals, 0.0)
+                return mfrac_vals
+
+            def get_zero_mfrac():
+                """Return zeros when no mfrac data."""
+                return jnp.zeros(max_objects, dtype=jnp.float64)
+
+            mfrac_vals = jax.lax.cond(
+                jnp.any(mcal_res_by_band[band][shear].mfrac > 0),
+                get_mfrac_values,
+                get_zero_mfrac,
+            )
+
+            # Pad observations once before extracting sub-observations
+            pad_width = moment_stamp_size // 2 + 1
+            padded_mbobs_single = jax_get_mb_obs(
+                mcal_res_by_band[band][shear], pad_width=pad_width
+            )
+
+            padded_xs = x_coords + pad_width
+            padded_ys = y_coords + pad_width
+
+            # extract subobs
+            _, padded_xs_out, padded_ys_out, all_subobs = (
+                jax_batch_generate_mbobs_for_detections(
+                    padded_mbobs_single,
+                    xs=padded_xs,
+                    ys=padded_ys,
+                    box_size=moment_stamp_size,
+                )
+            )  # TODO: Extract subobs for all bands together outside the loop
+
+            # Process all detections in batch
+            obj_ids = jnp.arange(1, max_objects + 1, dtype=jnp.int64)
+
+            def process_detection(
+                subobs, obj_id, obj_x, obj_y, bmask_flag, mfrac_val, det_flag_val
+            ):
+                return jax_fit_single_detection(
+                    mbobs=subobs[0][0],  # TODO: Maybe deal with all bands together
+                    psf_res=psf_res_by_band[band],
+                    obj_id=obj_id,
+                    obj_x=obj_x,
+                    obj_y=obj_y,
+                    shear_idx=shear_idx,
+                    bmask_flag=bmask_flag,
+                    mfrac_val=mfrac_val,
+                    det_flag=det_flag_val,
+                )
+
+            # Vectorize over detections
+            batch_results = jax.vmap(process_detection)(
+                all_subobs,
+                obj_ids,
+                padded_xs_out - pad_width,
+                padded_ys_out - pad_width,
+                bmask_flags,
+                mfrac_vals,
+                det_flag,
+            )
+
+            batch_results["band_idx"] = jnp.full(max_objects, iband, dtype=jnp.int32)
+            all_detection_results.append(batch_results)
+
+    # Concatenate all batched results at once
+    dfmdet_res = jax.tree_util.tree_map(
+        lambda *arrays: jnp.concatenate(arrays), *all_detection_results
+    )
+
+    # Convert mdet_step_idx integers to string labels
+    mdet_step_strings = np.array(
+        [DEFAULT_SHEARS[int(idx)] for idx in dfmdet_res["mdet_step_idx"]], dtype="U7"
+    )
+    dfmdet_res["mdet_step"] = mdet_step_strings
+    del dfmdet_res["mdet_step_idx"]
+
+    # Convert band_idx integers to band names
+    band_strings = np.array(
+        [bands[int(idx)] for idx in dfmdet_res["band_idx"]], dtype="U10"
+    )
+    dfmdet_res["band"] = band_strings
+    del dfmdet_res["band_idx"]
+
+    result = {"dfmdet_res": dfmdet_res}
+
+    if return_k_info:
+        result["kinfo"] = kinfo
+
+    if return_debug_info:
+        result["mcal_res"] = mcal_res_by_band
         result["detections"] = detections
 
     return result
