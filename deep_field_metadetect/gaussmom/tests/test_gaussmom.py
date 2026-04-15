@@ -15,7 +15,7 @@ from deep_field_metadetect.gaussmom.gaussmom import (
     _set_fluxerr_s2n_flux_flags,
     _set_T_Terr_Tflags,
 )
-from deep_field_metadetect.gaussmom.gaussmom_core import obs_to_gaussmom_obs
+from deep_field_metadetect.gaussmom.gaussmom_core import nigmix_obs_to_gaussmom_obs
 
 
 @pytest.mark.parametrize("weight_fac", [1, 1e5])
@@ -58,7 +58,7 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
         jacobian=ngmix_jac,
     )
 
-    gaussmom_obs = obs_to_gaussmom_obs(obs=ngmix_obs)
+    gaussmom_obs = nigmix_obs_to_gaussmom_obs(obs=ngmix_obs)
 
     fitter = GaussMom(fwhm=fwhm * weight_fac)
     res = fitter.go(gaussmom_obs=gaussmom_obs)
@@ -98,7 +98,7 @@ def test_gaussmom_smoke(g1_true, g2_true, wcs_g1, wcs_g2, weight_fac):
         _im = im + (rng.normal(size=im.shape) * noise)
         ngmix_obs = Observation(image=_im, weight=wgt, jacobian=jac)
 
-        gaussmom_obs = obs_to_gaussmom_obs(obs=ngmix_obs)
+        gaussmom_obs = nigmix_obs_to_gaussmom_obs(obs=ngmix_obs)
         # use a huge weight so that we get the raw moments back out
         fitter = GaussMom(fwhm=fwhm * weight_fac)
         res = fitter.go(gaussmom_obs=gaussmom_obs)
@@ -188,7 +188,7 @@ def test_gaussmom_flags():
             jacobian=jacobian,
         )
 
-        gaussmom_obs = obs_to_gaussmom_obs(obs=ngmix_obs)
+        gaussmom_obs = nigmix_obs_to_gaussmom_obs(obs=ngmix_obs)
 
         fitter = GaussMom(fwhm=1.2)
 

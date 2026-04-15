@@ -3,6 +3,14 @@ from typing import Tuple, Union
 
 import jax
 import jax.numpy as jnp
+import jax_galsim
+
+from deep_field_metadetect.detect import BMASK_EDGE
+from deep_field_metadetect.jaxify.observation import (
+    DFMdetMultiBandObsList,
+    DFMdetObservation,
+    DFMdetObsList,
+)
 
 
 @partial(jax.jit, static_argnames=["window_size"])
@@ -36,7 +44,7 @@ def local_maxima_filter(
         image, -jnp.inf, jax.lax.max, (window_size, window_size), (1, 1), "SAME"
     )
 
-    threshold_mask = image > 3 * noise_array
+    threshold_mask = image > jnp.abs(3 * noise_array)
     local_max_mask = (image == max_pooled) & threshold_mask
 
     return local_max_mask
@@ -69,6 +77,9 @@ def peak_finder(
     positions : jnp.ndarray
         Array of peak coordinates (y, x) of shape (max_objects, 2)
         Invalid entries filled with (-1, -1)
+    det_flag : jnp.ndarray
+        Integer array of shape (max_objects,) where:
+        1 = actual detection, 0 = fill value
     """
     local_max_mask = local_maxima_filter(
         image=image,
@@ -78,7 +89,11 @@ def peak_finder(
 
     positions = jnp.argwhere(local_max_mask, size=max_objects, fill_value=(-1, -1))
 
-    return positions
+    # Create detection flag: 1 for actual detections, 0 for fill values
+    # Fill values have (-1, -1) coordinates
+    det_flag = (~jnp.all(positions == -1, axis=1)).astype(jnp.int32)
+
+    return positions, det_flag
 
 
 @partial(jax.jit, static_argnames=["window_size"])
@@ -87,8 +102,10 @@ def refine_centroid(
 ) -> Tuple[float, float, bool]:
     """
     Refine peak position of single object using intensity-weighted centroid.
-    Skips refinement for objects too close to the border.
-    Returns whether object was near border for warning purposes.
+
+    Skips refinement if too close to the border or if proposed shift > 1 pixel.
+    The proposed shift can be > 1 if the noise theshold is not properly set
+    and detections are in noisy regions.
 
     Parameters:
     -----------
@@ -98,15 +115,16 @@ def refine_centroid(
         Initial peak position
     window_size : int
         Size of window around peak for centroid calculation
-        if window crosses image boudary, optimization is skipped.
+        if window crosses image boundary, optimization is skipped.
 
     Returns:
     --------
     jnp.ndarray
         Refined peak coordinates (refined_y, refined_x) : float
-        Note: original coordinatesare returned if near border
-    near_border : bool
-        True if object was near border and refinement was skipped
+        Note: original coordinates are returned if refinement is skipped
+    refinement_flag : int
+        1 if refinement was applied,
+        0 if refinement was skipped (near border or large shift)
     """
     half_window = window_size // 2
     height, width = image.shape
@@ -120,7 +138,7 @@ def refine_centroid(
     )
 
     def border_case():
-        return jnp.array([peak[0], peak[1]]).astype(float)
+        return jnp.array([peak[0], peak[1]], dtype=jnp.float_), 0
 
     def normal_case():
         window = jax.lax.dynamic_slice(
@@ -140,14 +158,25 @@ def refine_centroid(
         y_shift = jnp.sum((y_grid) * window) / total_intensity
         x_shift = jnp.sum((x_grid) * window) / total_intensity
 
-        refined_y = y_shift + peak[0]
-        refined_x = x_shift + peak[1]
+        # Check if proposed shift is > 1 pixel
+        shift_magnitude = jnp.sqrt(y_shift**2 + x_shift**2)
+        shift_too_large = shift_magnitude > 1.0
 
-        return jnp.array([refined_y, refined_x])
+        def apply_shift():
+            refined_y = y_shift + peak[0]
+            refined_x = x_shift + peak[1]
+            # Clip coordinates to be within valid image bounds
+            refined_y = jnp.clip(refined_y, 0.0, height - 1.0)
+            refined_x = jnp.clip(refined_x, 0.0, width - 1.0)
+            return jnp.array([refined_y, refined_x], dtype=jnp.float_), 1
 
-    result = jax.lax.cond(near_border, border_case, normal_case)
+        def skip_shift():
+            return jnp.array([peak[0], peak[1]], dtype=jnp.float_), 0
 
-    return jnp.array([result[0], result[1]]), near_border
+        return jax.lax.cond(shift_too_large, skip_shift, apply_shift)
+
+    result, flag = jax.lax.cond(near_border, border_case, normal_case)
+    return result, flag
 
 
 @partial(jax.jit, static_argnames=["window_size"])
@@ -158,6 +187,13 @@ def refine_centroid_in_cell(
 ):
     """
     vmapped version of refine_centroid
+
+    Returns:
+    --------
+    refined_positions : jnp.ndarray
+        Array of refined coordinates
+    refinement_flags : jnp.ndarray
+        Array of flags (1 if refinement applied, 0 if skipped)
     """
     return jax.vmap(refine_centroid, in_axes=(None, 0, None))(
         image, peak_positions, window_size
@@ -171,7 +207,7 @@ def detect_galaxies(
     window_size: int = 5,
     refine_centroids: bool = True,
     max_objects: int = 100,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     Complete galaxy center detection pipeline with JIT compilation support.
 
@@ -198,10 +234,14 @@ def detect_galaxies(
     refined_positions : jnp.ndarray
         Array of detected galaxy centers (y, x) after centroid refinement.
         Returns the refined floating point values of the center.
-    border_flags : jnp.ndarray
-        Array indicating which objects were near border (shape max_objects,)
+    refinement_flags : jnp.ndarray
+        Array indicating which objects had refinement applied (shape max_objects,)
+        1 = refinement applied, 0 = refinement skipped (near border or large shift)
+    det_flag : jnp.ndarray
+        Integer array of shape (max_objects,) where:
+        1 = actual detection, 0 = fill value
     """
-    peak_positions = peak_finder(
+    peak_positions, det_flag = peak_finder(
         image=image,
         noise=noise,
         window_size=window_size,
@@ -209,15 +249,15 @@ def detect_galaxies(
     )
 
     if not refine_centroids:
-        border_flags = jnp.zeros(max_objects, dtype=bool)
-        return peak_positions, peak_positions.astype(float), border_flags
+        refinement_flags = jnp.zeros(max_objects, dtype=jnp.int32)
+        return peak_positions, peak_positions.astype(float), refinement_flags, det_flag
 
-    refined_positions, border_flags = refine_centroid_in_cell(
+    refined_positions, refinement_flags = refine_centroid_in_cell(
         image, peak_positions, window_size=5
     )  # Using only a single iteration for now.
-    # Multiple iter not tested, but can lead to unstability for blended objects
+    # Multiple iter not tested, but can lead to instability for blended objects
 
-    return peak_positions, refined_positions, border_flags
+    return peak_positions, refined_positions, refinement_flags, det_flag
 
 
 @partial(jax.jit, static_argnames=["max_iterations"])
@@ -428,3 +468,172 @@ def watershed_from_peaks(
     )
 
     return watershed_labels
+
+
+@partial(jax.jit, static_argnames=["box_size"])
+def _get_subobs_jax(
+    obs: DFMdetObservation,
+    x: float,
+    y: float,
+    box_size: int,
+) -> DFMdetObservation:
+    """Create a sub-observation around a given position using dynamic slicing.
+
+    This function assumes the observation has already been padded appropriately
+    so that boundary cases never occur. Uses jax.lax.dynamic_slice for efficient,
+    JIT-compatible extraction.
+
+    Parameters
+    ----------
+    obs : DFMdetObservation
+        The source observation (must be pre-padded).
+    x, y : float
+        The object position coordinates.
+        Note: should already include padding offset if obs is padded.
+    box_size : int
+        Size of the target sub-box.
+
+    Returns
+    -------
+    DFMdetObservation
+        Sub-observation around the given position.
+    """
+    half_box = box_size // 2
+
+    # Calculate top-left corner of the box
+    # Coordinates should already be offset for padding by the caller
+    ix = jnp.int32(x)
+    iy = jnp.int32(y)
+    start_x = ix - half_box + 1
+    start_y = iy - half_box + 1
+
+    # Extract sub-images using dynamic_slice (no boundary checks needed!)
+    sub_image = jax.lax.dynamic_slice(
+        obs.image, (start_y, start_x), (box_size, box_size)
+    )
+    sub_weight = jax.lax.dynamic_slice(
+        obs.weight, (start_y, start_x), (box_size, box_size)
+    )
+    sub_bmask = jax.lax.dynamic_slice(
+        obs.bmask, (start_y, start_x), (box_size, box_size)
+    )
+    sub_ormask = jax.lax.dynamic_slice(
+        obs.ormask, (start_y, start_x), (box_size, box_size)
+    )
+    sub_noise = jax.lax.dynamic_slice(
+        obs.noise, (start_y, start_x), (box_size, box_size)
+    )
+    sub_mfrac = jax.lax.dynamic_slice(
+        obs.mfrac, (start_y, start_x), (box_size, box_size)
+    )
+
+    # Update mfrac for edge pixels
+    msk = (sub_bmask & BMASK_EDGE) != 0
+    sub_mfrac = jnp.where(msk, 1.0, sub_mfrac)
+
+    # Create new WCS with adjusted origin
+    # The origin should be at the object position within the sub-image
+    new_wcs = jax_galsim.wcs.AffineTransform(
+        dudx=obs.wcs.dudx,
+        dudy=obs.wcs.dudy,
+        dvdx=obs.wcs.dvdx,
+        dvdy=obs.wcs.dvdy,
+        origin=jax_galsim.PositionD(
+            x=(x - start_x) + 1,
+            y=(y - start_y) + 1,
+        ),
+    )
+
+    return DFMdetObservation(
+        image=sub_image,
+        weight=sub_weight,
+        bmask=sub_bmask,
+        ormask=sub_ormask,
+        noise=sub_noise,
+        mfrac=sub_mfrac,
+        wcs=new_wcs,
+        psf=obs.psf,
+        meta=obs.meta,
+        store_pixels=obs.store_pixels,
+        ignore_zero_weight=obs.ignore_zero_weight,
+    )
+
+
+@partial(jax.jit, static_argnames=["box_size", "unroll"])
+def jax_batch_generate_mbobs_for_detections(
+    mbobs: DFMdetMultiBandObsList,
+    xs: jnp.ndarray,
+    ys: jnp.ndarray,
+    box_size: int = 48,
+    ids: jnp.ndarray = None,
+    unroll: int = 4,
+):
+    """Fully JIT-able batch version using scan to process all detections.
+
+    This function uses JAX's scan to sequentially extract sub-observations
+    for all detected objects in a memory-efficient way.
+
+    Parameters
+    ----------
+    mbobs : DFMdetMultiBandObsList
+        The multi-band observations to generate sub-mbobs from.
+        Must be already converted using jax_get_mb_obs() with appropriate padding.
+    xs : jnp.ndarray
+        Array of x positions of the objects (shape: [n_objects]).
+        Should include padding offset if mbobs is padded.
+    ys : jnp.ndarray
+        Array of y positions of the objects (shape: [n_objects]).
+        Should include padding offset if mbobs is padded.
+    box_size : int, optional
+        The size of the sub-boxes around the objects. Default is 48.
+    ids : jnp.ndarray, optional
+        Array of object IDs. If None, uses indices 0, 1, 2, ...
+    unroll : int, optional
+        Controls loop unrolling in scan for memory vs speed tradeoff.
+        - Default: 4
+        - Higher values: Faster but use more memory (like vmap)
+
+    Returns
+    -------
+    tuple of (ids, xs, ys, all_subobs)
+        ids : jnp.ndarray
+            Array of object IDs (shape: [n_objects])
+        xs : jnp.ndarray
+            Array of x positions (shape: [n_objects])
+        ys : jnp.ndarray
+            Array of y positions (shape: [n_objects])
+        all_subobs : DFMdetMultiBandObsList
+            Sub-mbobs for all detections, with leading dimension matching n_objects.
+
+    """
+
+    def extract_single_detection(x, y):
+        """Extract sub-observations for a single detection across all bands."""
+        sub_obs_lists = []
+        for obslist in mbobs:
+            sub_obs_list = []
+            for obs in obslist:
+                sub_obs = _get_subobs_jax(obs, x, y, box_size)
+                sub_obs_list.append(sub_obs)
+            sub_obs_lists.append(DFMdetObsList(sub_obs_list))
+
+        return DFMdetMultiBandObsList(sub_obs_lists)
+
+    num_objects = xs.shape[0]
+    if ids is None:
+        ids = jnp.arange(num_objects)
+
+    def scan_fn(carry, xy):
+        """Process one detection given (x, y) coordinates."""
+        x, y = xy
+        subobs = extract_single_detection(x, y)
+        return carry, subobs
+
+    xy_pairs = jnp.stack([xs, ys], axis=1)
+
+    # Use scan to iterate through all detections
+    # Use unroll parameter to control memory vs speed tradeoff
+    _, all_subobs = jax.lax.scan(scan_fn, None, xy_pairs, unroll=unroll)
+
+    # Return arrays directly (no Python conversion inside JIT)
+    return ids, xs, ys, all_subobs

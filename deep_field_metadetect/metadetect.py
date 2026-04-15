@@ -1,3 +1,5 @@
+import logging
+
 import ngmix
 import numpy as np
 
@@ -12,6 +14,8 @@ from deep_field_metadetect.metacal import (
 )
 from deep_field_metadetect.mfrac import compute_mfrac_interp_image
 from deep_field_metadetect.utils import fit_gauss_mom_obs, fit_gauss_mom_obs_and_psf
+
+logger = logging.getLogger(__name__)
 
 
 def single_band_deep_field_metadetect(
@@ -29,6 +33,7 @@ def single_band_deep_field_metadetect(
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
     fft_size=None,
+    return_debug_info=False,
 ):
     """Run deep-field metadetection for a simple scenario of a single band
     with a single image per band using only post-PSF Gaussian weighted moments.
@@ -78,16 +83,24 @@ def single_band_deep_field_metadetect(
         To fix max and min values of FFT size.
         Defaults to None which lets Galsim determine the values.
         Used mainly to test against Galsim.
+    return_debug_info: bool
+        return detections and mcal_res for debugging
 
     Returns
     -------
-    dfmdet_res : numpy.ndarray
-        The deep-field metadetection results as a structured array containing
-        detection and measurement results for all shears.
-    kinfo: tuple [Optional if return_k_info is True]
-        For debugging.
-        kinfo is returned in the following order:
-        _force_stepk_field, _force_maxk_field, _force_stepk_psf, _force_maxk_psf.
+    result : dict
+        A dictionary containing the requested results with the following keys:
+
+        - "dfmdet_res" : numpy.ndarray (always present)
+            The deep-field metadetection results as a structured array containing
+            detection and measurement results for all shears.
+        - "kinfo" : tuple (only if return_k_info=True)
+            Tuple containing (_force_stepk_field, _force_maxk_field,
+            _force_stepk_psf, _force_maxk_psf).
+        - "mcal_res" : dict (only if return_debug_info=True)
+            The metacalibration results.
+        - "detections" : list (only if return_debug_info=True)
+            List of detection catalogs for each shear.
     """
     if shears is None:
         shears = DEFAULT_SHEARS
@@ -113,13 +126,15 @@ def single_band_deep_field_metadetect(
 
     psf_res = fit_gauss_mom_obs(mcal_res["noshear"].psf)
     dfmdet_res = []
+    detections = []
     for shear in shears:
         obs = mcal_res[shear]
         detres = run_detection_sep(obs, nodet_flags=nodet_flags)
-
+        logger.debug("num detections: %d", len(detres["catalog"]["x"]))
         ixc = (detres["catalog"]["x"] + 0.5).astype(int)
         iyc = (detres["catalog"]["y"] + 0.5).astype(int)
         bmask_flags = obs.bmask[iyc, ixc]
+        detections.append(detres["catalog"])
 
         mfrac_vals = np.zeros_like(bmask_flags, dtype="f4")
         if np.any(obs.mfrac > 0):
@@ -144,6 +159,7 @@ def single_band_deep_field_metadetect(
                 (ind + 1, obj["x"], obj["y"], shear, bmask_flags[ind], mfrac_vals[ind])
                 + tuple(fres[0])
             )
+            logger.debug("%d non-jax tuple: %s", ind, tuple(fres[0]))
 
     total_dtype = [
         ("id", "i8"),
@@ -154,7 +170,13 @@ def single_band_deep_field_metadetect(
         ("mfrac", "f4"),
     ] + fres.dtype.descr
 
-    if return_k_info:
-        return (np.array(dfmdet_res, dtype=total_dtype), kinfo)
+    result = {"dfmdet_res": np.array(dfmdet_res, dtype=total_dtype)}
 
-    return np.array(dfmdet_res, dtype=total_dtype)
+    if return_k_info:
+        result["kinfo"] = kinfo
+
+    if return_debug_info:
+        result["mcal_res"] = mcal_res
+        result["detections"] = detections
+
+    return result
