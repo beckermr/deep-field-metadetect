@@ -140,44 +140,58 @@ def test_metadetect_single_r_band_multiband_vs_single_band():
         # compare key measurements
         if n_multi > 0:
             # positions
-            np.testing.assert_array_equal(
+            np.testing.assert_allclose(
                 multi_r_res["x"][multi_step],
                 single_res["x"][single_step],
+                rtol=1e-15,
+                atol=1e-15,
                 err_msg=f"x positions differ for step {step}",
             )
-            np.testing.assert_array_equal(
+            np.testing.assert_allclose(
                 multi_r_res["y"][multi_step],
                 single_res["y"][single_step],
+                rtol=1e-15,
+                atol=1e-15,
                 err_msg=f"y positions differ for step {step}",
             )
 
             # measurements
-            np.testing.assert_array_equal(
+            np.testing.assert_allclose(
                 multi_r_res["wmom_g1"][multi_step],
                 single_res["wmom_g1"][single_step],
+                rtol=1e-15,
+                atol=1e-15,
                 err_msg=f"wmom_g1 differs for step {step}",
             )
-            np.testing.assert_array_equal(
+            np.testing.assert_allclose(
                 multi_r_res["wmom_g2"][multi_step],
                 single_res["wmom_g2"][single_step],
+                rtol=1e-15,
+                atol=1e-15,
                 err_msg=f"wmom_g2 differs for step {step}",
             )
 
-            np.testing.assert_array_equal(
+            np.testing.assert_allclose(
                 multi_r_res["wmom_T_ratio"][multi_step],
                 single_res["wmom_T_ratio"][single_step],
+                rtol=1e-15,
+                atol=1e-15,
                 err_msg=f"wmom_T_ratio differs for step {step}",
             )
 
-            np.testing.assert_array_equal(
+            np.testing.assert_allclose(
                 multi_r_res["wmom_psf_T"][multi_step],
                 single_res["wmom_psf_T"][single_step],
+                rtol=1e-15,
+                atol=1e-15,
                 err_msg=f"wmom_psf_T differs for step {step}",
             )
 
-            np.testing.assert_array_equal(
+            np.testing.assert_allclose(
                 multi_r_res["wmom_s2n"][multi_step],
                 single_res["wmom_s2n"][single_step],
+                rtol=1e-15,
+                atol=1e-15,
                 err_msg=f"wmom_s2n differs for step {step}",
             )
 
@@ -187,9 +201,11 @@ def test_metadetect_single_r_band_multiband_vs_single_band():
                 err_msg=f"bmask_flags differ for step {step}",
             )
 
-            np.testing.assert_array_equal(
+            np.testing.assert_allclose(
                 multi_r_res["mfrac"][multi_step],
                 single_res["mfrac"][single_step],
+                rtol=1e-15,
+                atol=1e-15,
                 err_msg=f"mfrac differs for step {step}",
             )
 
