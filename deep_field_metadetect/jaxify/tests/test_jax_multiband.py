@@ -214,3 +214,99 @@ def test_metadetect_single_r_band_multiband_vs_single_band():
                 single_res["wmom_flags"][single_step],
                 err_msg=f"wmom_flags differ for step {step}",
             )
+
+
+def test_metadetect_gri_bands_detect_on_ri_only():
+    """Test multiband metadetect with gri bands, detecting/measuring only on ri."""
+    bands = ["g", "r", "i"]
+    nxy = 201
+    nxy_psf = 53
+    scale = 0.2
+
+    # Create gri simulation with 3 objects
+    obs_w, obs_d, obs_dn = _make_multiband_sim(
+        seed=123,
+        bands=bands,
+        g1=0.02,
+        g2=-0.01,
+        s2n=500,
+        deep_noise_fac=1.0 / np.sqrt(10),
+        deep_psf_fac=1.0,
+        n_objs=3,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
+        buff=25,
+    )
+
+    dk = compute_dk(image_size=nxy_psf, pixel_scale=scale)
+    kim_size = compute_kim_size(image_size=nxy_psf)
+
+    result = jax_multi_band_deep_field_metadetect(
+        obs_w,
+        obs_d,
+        obs_dn,
+        nxy=nxy,
+        nxy_psf=nxy_psf,
+        detbands=("r", "i"),  # Only use r and i for detection
+        reconv_psf_dk=dk,
+        reconv_psf_kim_size=kim_size,
+    )
+
+    dfmdet_res = result["dfmdet_res"]
+
+    # Check that we only have results for r and i bands (not g)
+    unique_bands = np.unique(dfmdet_res["band"])
+    assert set(unique_bands) == {"r", "i"}, (
+        f"Expected measurements only in r, i bands, got {unique_bands}"
+    )
+
+    for step in ["noshear", "1p", "1m", "2p", "2m"]:
+        step_mask = dfmdet_res["mdet_step"] == step
+        valid_mask = step_mask & (dfmdet_res["det_flag"] == 1)
+
+        # Verify measurements exist for r and i bands only and are finite
+        for band in ["r", "i"]:
+            band_step_valid_mask = valid_mask & (dfmdet_res["band"] == band)
+            n_band_detections = np.sum(band_step_valid_mask)
+            assert n_band_detections > 0, (
+                f"No detections in {band} band for step {step}"
+            )
+
+            g1 = dfmdet_res["wmom_g1"][band_step_valid_mask]
+            g2 = dfmdet_res["wmom_g2"][band_step_valid_mask]
+            s2n = dfmdet_res["wmom_s2n"][band_step_valid_mask]
+            T_ratio = dfmdet_res["wmom_T_ratio"][band_step_valid_mask]
+
+            assert np.all(np.isfinite(g1)), f"Non-finite g1 values in {band} band"
+            assert np.all(np.isfinite(g2)), f"Non-finite g2 values in {band} band"
+            assert np.all(s2n > 0), f"Non-positive S/N in {band} band"
+            assert np.all(T_ratio > 0), f"Non-positive T_ratio in {band} band"
+
+    # Verify that r and i bands have same detection positions
+    # (since they're detected from the same ri coadd)
+    noshear_valid_mask = (dfmdet_res["mdet_step"] == "noshear") & (
+        dfmdet_res["det_flag"] == 1
+    )
+
+    r_mask = noshear_valid_mask & (dfmdet_res["band"] == "r")
+    i_mask = noshear_valid_mask & (dfmdet_res["band"] == "i")
+
+    r_x = dfmdet_res["x"][r_mask]
+    r_y = dfmdet_res["y"][r_mask]
+    r_ids = dfmdet_res["id"][r_mask]
+
+    i_x = dfmdet_res["x"][i_mask]
+    i_y = dfmdet_res["y"][i_mask]
+    i_ids = dfmdet_res["id"][i_mask]
+
+    # Same object IDs and positions across r and i bands
+    np.testing.assert_array_equal(
+        r_ids, i_ids, err_msg="Object IDs differ between r and i bands"
+    )
+    np.testing.assert_array_equal(
+        r_x, i_x, err_msg="X positions differ between r and i bands"
+    )
+    np.testing.assert_array_equal(
+        r_y, i_y, err_msg="Y positions differ between r and i bands"
+    )
