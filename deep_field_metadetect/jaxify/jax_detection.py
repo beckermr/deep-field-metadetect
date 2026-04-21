@@ -643,7 +643,7 @@ def jax_batch_generate_mbobs_for_detections(
 def jax_make_mb_coadd_from_list(obs_list):
     """Make a multiband coadd from a list of observations using JAX.
 
-    This is a JIT-compatible version that works with tuples or DFMdetObsList.
+    This is a JIT-compatible version that works with list/tuples or DFMdetObsList.
     This method assumes the WCS is the same for all images in the obs_list.
 
     Parameters

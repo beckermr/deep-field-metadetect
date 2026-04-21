@@ -257,7 +257,7 @@ def jax_single_band_deep_field_metadetect(
             mfrac_vals = jax.vmap(lambda x, y: _interp_mfrac.xValue(x, y))(
                 x_coords, y_coords
             )
-            # For fill values (-1, -1), the interpolation will not make
+            # For fill values (-1, -1), the interpolation will not make sense
             mfrac_vals = jnp.where(det_flag == 1, mfrac_vals, 0.0)
             return mfrac_vals
 
@@ -324,7 +324,6 @@ def jax_single_band_deep_field_metadetect(
     )
 
     # Convert mdet_step_idx integers to string labels to match original format
-    # TODO: check if the string can be returned directly
     mdet_step_strings = np.array(
         [DEFAULT_SHEARS[int(idx)] for idx in dfmdet_res["mdet_step_idx"]], dtype="U7"
     )
@@ -411,8 +410,9 @@ def _jax_multi_band_deep_field_metadetect_core(
         Number of bands. Must match the length of mb_obs_wide, mb_obs_deep,
         and mb_obs_deep_noise.
     detband_indices : tuple of int, optional
-        Tuple of band indices (e.g., (0, 1, 2)) to use for detection coadd.
-        If None, all bands are used. Default is None.
+        Tuple of band indices (e.g., (0, 1, 2)) to use for detection coadd
+        and measurements. Metacalibration (shearing) is only performed on these
+        bands to optimize computation. If None, all bands are used. Default is None.
     step : float, optional
         The step size for the metacalibration, by default DEFAULT_STEP.
     shears : list, optional
@@ -479,9 +479,11 @@ def _jax_multi_band_deep_field_metadetect_core(
             to converts them to strings.
         - "kinfo" : tuple (only if return_k_info=True)
             Tuple containing (_force_stepk_field, _force_maxk_field,
-            _force_stepk_psf, _force_maxk_psf) for each band.
+            _force_stepk_psf, _force_maxk_psf) for each band in detband_indices,
+            in the order specified by detband_indices.
         - "mcal_res" : tuple (only if return_debug_info=True)
-            The metacalibration results for each band, as a tuple.
+            The metacalibration results for each band in detband_indices, as a tuple
+            in the order specified by detband_indices.
         - "detections" : list (only if return_debug_info=True)
             List of detection catalogs for each shear.
     """
@@ -492,11 +494,11 @@ def _jax_multi_band_deep_field_metadetect_core(
         detband_indices = tuple(range(n_bands))
 
     # shear images for each band
-    mcal_res_list = []
-    kinfo_list = []
+    # Only process bands that will be used for measurements (detband_indices)
+    mcal_res_dict = {}
+    kinfo_dict = {}
     # TODO: vmap this?
-    # TODO: obtain the sheared images only for bands on which tests are to be run
-    for band_idx in range(n_bands):
+    for band_idx in detband_indices:
         mcal_res = jax_metacal_wide_and_deep_psf_matched(
             obs_wide=mb_obs_wide[band_idx][0],
             obs_deep=mb_obs_deep[band_idx][0],
@@ -519,15 +521,15 @@ def _jax_multi_band_deep_field_metadetect_core(
 
         if return_k_info:
             mcal_res, kinfo_band = mcal_res
-            kinfo_list.append(kinfo_band)
+            kinfo_dict[band_idx] = kinfo_band
 
-        mcal_res_list.append(mcal_res)
+        mcal_res_dict[band_idx] = mcal_res
 
-    # Compute PSF results (for each band)
-    psf_res_list = []
-    for band_idx in range(n_bands):
-        psf_res_list.append(
-            jax_fit_gauss_mom_obs(mcal_res_list[band_idx]["noshear"].psf)
+    # Compute PSF results (for each band in detband_indices)
+    psf_res_dict = {}
+    for band_idx in detband_indices:
+        psf_res_dict[band_idx] = jax_fit_gauss_mom_obs(
+            mcal_res_dict[band_idx]["noshear"].psf
         )
 
     # For each shear, create observation list and run detection and measurements
@@ -535,9 +537,7 @@ def _jax_multi_band_deep_field_metadetect_core(
     detections = []
     for shear_idx, shear in enumerate(shears):
         # Create coadd using detband_indices and run detection
-        obs_list = [mcal_res_list[band_idx][shear] for band_idx in range(n_bands)]
-
-        detobs_list = [obs_list[i] for i in detband_indices]
+        detobs_list = [mcal_res_dict[band_idx][shear] for band_idx in detband_indices]
         detobs = jax_make_mb_coadd_from_list(detobs_list)
 
         noise_level = jnp.std(detobs.noise)
@@ -555,14 +555,14 @@ def _jax_multi_band_deep_field_metadetect_core(
         bmask_flags = jnp.where(valid_mask, detobs.bmask[iyc, ixc], 0)
         detections.append(detres)
 
-        # Process measurements for each band for every detection
-        for band_idx in range(n_bands):
+        # Process measurements for each band in detband_indices for every detection
+        for band_idx in detband_indices:
 
             def get_mfrac_values():
                 """Compute interpolated mfrac values."""
                 _interp_mfrac = jax_compute_mfrac_interp_image(
-                    mcal_res_list[band_idx][shear].mfrac,
-                    mcal_res_list[band_idx][shear].wcs.local(),
+                    mcal_res_dict[band_idx][shear].mfrac,
+                    mcal_res_dict[band_idx][shear].wcs.local(),
                     fft_size=fft_size,
                 )
 
@@ -578,7 +578,7 @@ def _jax_multi_band_deep_field_metadetect_core(
                 return jnp.zeros(max_objects, dtype=jnp.float64)
 
             mfrac_vals = jax.lax.cond(
-                jnp.any(mcal_res_list[band_idx][shear].mfrac > 0),
+                jnp.any(mcal_res_dict[band_idx][shear].mfrac > 0),
                 get_mfrac_values,
                 get_zero_mfrac,
             )
@@ -586,7 +586,7 @@ def _jax_multi_band_deep_field_metadetect_core(
             # Pad observations once before extracting sub-observations
             pad_width = moment_stamp_size // 2 + 1
             padded_mbobs_single = jax_get_mb_obs(
-                mcal_res_list[band_idx][shear], pad_width=pad_width
+                mcal_res_dict[band_idx][shear], pad_width=pad_width
             )
 
             padded_xs = x_coords + pad_width
@@ -610,7 +610,7 @@ def _jax_multi_band_deep_field_metadetect_core(
             ):
                 return jax_fit_single_detection(
                     mbobs=subobs[0][0],
-                    psf_res=psf_res_list[band_idx],
+                    psf_res=psf_res_dict[band_idx],
                     obj_id=obj_id,
                     obj_x=obj_x,
                     obj_y=obj_y,
@@ -642,10 +642,12 @@ def _jax_multi_band_deep_field_metadetect_core(
     result = {"dfmdet_res": dfmdet_res}
 
     if return_k_info:
-        result["kinfo"] = tuple(kinfo_list)
+        result["kinfo"] = tuple(kinfo_dict[band_idx] for band_idx in detband_indices)
 
     if return_debug_info:
-        result["mcal_res"] = tuple(mcal_res_list)
+        result["mcal_res"] = tuple(
+            mcal_res_dict[band_idx] for band_idx in detband_indices
+        )
         result["detections"] = detections
 
     return result
