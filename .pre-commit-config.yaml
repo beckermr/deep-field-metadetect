@@ -33,3 +33,22 @@ repos:
       - id: ruff
         args: [ --fix ]
       - id: ruff-format
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout
+        args:
+              - --keep-output
+  - repo: https://github.com/nbQA-dev/nbQA
+    rev: 1.9.1
+    hooks:
+    - id: nbqa-black
+      additional_dependencies: [black==24.10.0]
+    - id: nbqa-pyupgrade
+      additional_dependencies: [pyupgrade==3.21.2]
+    - id: nbqa-isort
+      additional_dependencies: [isort==8.0.1]
+      args: [--profile=black]
+    - id: nbqa-flake8
+      additional_dependencies: [flake8==7.1.1]
+      args: ['--ignore=E501,E402,E203,E731,W503']
