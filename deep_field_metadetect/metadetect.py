@@ -32,7 +32,8 @@ def single_band_deep_field_metadetect(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=None,
+    psf_fft_size=None,
+    image_fft_size=None,
     return_debug_info=False,
 ):
     """Run deep-field metadetection for a simple scenario of a single band
@@ -79,10 +80,14 @@ def single_band_deep_field_metadetect(
         Force stepk for drawing PSF images
         Defaults to 0.0, which lets Galsim choose the value.
         Used mainly for testing.
-    fft_size: int, optional
-        To fix max and min values of FFT size.
+    psf_fft_size : int, optional
+        FFT size for PSF rendering operations.
         Defaults to None which lets Galsim determine the values.
-        Used mainly to test against Galsim.
+        Used mainly to test against JAXGalsim.
+    image_fft_size : int, optional
+        FFT size for image convolution operations.
+        Defaults to None which lets Galsim determine the values.
+        Used mainly to test against JAXGalsim.
     return_debug_info: bool
         return detections and mcal_res for debugging
 
@@ -118,7 +123,8 @@ def single_band_deep_field_metadetect(
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
-        fft_size=fft_size,
+        psf_fft_size=psf_fft_size,
+        image_fft_size=image_fft_size,
     )
 
     if return_k_info:
