@@ -637,3 +637,46 @@ def jax_batch_generate_mbobs_for_detections(
 
     # Return arrays directly (no Python conversion inside JIT)
     return ids, xs, ys, all_subobs
+
+
+@jax.jit
+def jax_make_mb_coadd_from_list(obs_list):
+    """Make a multiband coadd from a list of observations using JAX.
+
+    This is a JIT-compatible version that works with list/tuples or DFMdetObsList.
+    This method assumes the WCS is the same for all images in the obs_list.
+
+    Parameters
+    ----------
+    obs_list : tuple of DFMdetObservation or DFMdetObsList
+        Tuple or DFMdetObsList containing DFMdetObservation objects to coadd.
+
+    Returns
+    -------
+    detobs : DFMdetObservation
+        The detection coadd as a DFMdetObservation.
+    """
+    first_obs = obs_list[0]
+    coadd_im = jnp.zeros_like(first_obs.image)
+    coadd_noise = jnp.zeros_like(first_obs.image)
+    mask = jnp.zeros(coadd_im.shape, dtype=jnp.int32)
+    w_i_total = 0
+    final_var_map = jnp.zeros_like(first_obs.image)
+
+    for obs in obs_list:
+        w_i_total = w_i_total + jnp.median(obs.weight)
+
+    for obs in obs_list:
+        w_i = jnp.median(obs.weight) / w_i_total
+        coadd_im = coadd_im + obs.image * w_i
+        coadd_noise = coadd_noise + obs.noise * w_i
+        final_var_map = final_var_map + (1 / obs.weight) * w_i**2
+        mask = mask | obs.bmask
+
+    return DFMdetObservation(
+        image=coadd_im,
+        weight=1 / final_var_map,
+        bmask=mask,
+        noise=coadd_noise,
+        wcs=first_obs.wcs,
+    )
