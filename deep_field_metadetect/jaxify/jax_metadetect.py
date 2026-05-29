@@ -134,7 +134,6 @@ def jax_single_band_deep_field_metadetect(
     -------
     result : dict
         A dictionary containing the requested results with the following keys:
-
         - "dfmdet_res" : dict (always present)
             The deep-field metadetection results as a dictionary containing
             detection and measurement results for all shears. Keys include:
