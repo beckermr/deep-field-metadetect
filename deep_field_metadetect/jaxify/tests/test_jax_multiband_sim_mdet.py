@@ -6,11 +6,11 @@ import jax
 import jax.numpy as jnp
 
 from deep_field_metadetect.jaxify import jax_dfmd_defaults
-from deep_field_metadetect.jaxify.jax_galsim_simulation import (
-    generate_jax_galsim_multiband_sim_observations_jitted,
-)
 from deep_field_metadetect.jaxify.jax_metadetect import (
     jax_multi_band_deep_field_metadetect,
+)
+from deep_field_metadetect.jaxify.jax_sims import (
+    generate_jax_galsim_multiband_sim_observations_jitted,
 )
 
 
