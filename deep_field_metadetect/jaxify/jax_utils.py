@@ -522,3 +522,115 @@ def make_jax_galsim_simple_sim_jitted(
     )
 
     return obs_wide, obs_deep, obs_deep_noise
+
+
+def generate_jax_galsim_multiband_sim_observations_jitted(
+    key: jax.Array,
+    bands: Tuple[str, ...] = ("g", "r", "i"),
+    g1: float = 0.0,
+    g2: float = 0.0,
+    s2n: float = 20.0,
+    deep_noise_fac: float = 1.0 / jnp.sqrt(10),
+    deep_psf_fac: float = 1.0,
+    max_n_objs: int = 10,
+    scale: float = 0.2,
+    dim: int = 53,
+    dim_psf: int = 53,
+    buff: int = 26,
+    obj_flux_factor: float = 1.0,
+    band_flux_factors=None,
+    psf_fft_size: int = jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
+    image_fft_size: int = jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
+):
+    """JIT-compatible multi-band simulation using JAX-Galsim.
+
+    Parameters
+    ----------
+    key : jax.Array
+        JAX random key
+    bands : tuple of str
+        Band names
+    g1, g2 : float
+        Shear components
+    s2n : float
+        Signal-to-noise ratio
+    deep_noise_fac : float
+        Deep field noise factor
+    deep_psf_fac : float
+        Deep field PSF size factor
+    max_n_objs : int
+        Fixed number of objects
+    scale : float
+        Pixel scale in arcsec/pixel
+    dim : int
+        Image dimension
+    dim_psf : int
+        PSF dimension
+    buff : int
+        Buffer size in pixels from edge for placing galaxies (default: 26)
+    obj_flux_factor : float
+        Base flux factor
+    band_flux_factors : dict, optional
+        Per-band flux factors
+    psf_fft_size : int
+        FFT size for JAX-Galsim drawing PSFs (default: 64)
+    image_fft_size : int
+        FFT size for JAX-Galsim drawing object images (default: 256)
+
+    Returns
+    -------
+    obs_wide_dict : dict
+        Wide field observations by band
+    obs_deep_dict : dict
+        Deep field observations by band
+    obs_deep_noise_dict : dict
+        Deep noise observations by band
+
+    """
+    # Set default band flux factors
+    if band_flux_factors is None:
+        band_flux_factors = {"g": 0.7, "r": 1.0, "i": 0.8, "z": 0.6}
+
+    obs_wide_dict = {}
+    obs_deep_dict = {}
+    obs_deep_noise_dict = {}
+
+    # Split the key: position component (same for all bands) and noise base
+    key_positions, key_noise_base = jax.random.split(key, 2)
+
+    for band_idx, band in enumerate(bands):
+        # Get band-specific flux factor
+        if band in band_flux_factors:
+            band_obj_flux_factor = obj_flux_factor * band_flux_factors[band]
+        else:
+            band_obj_flux_factor = obj_flux_factor
+
+        # Scale S/N with flux
+        band_s2n = s2n * jnp.sqrt(band_flux_factors.get(band, 1.0))
+
+        # Create band-specific noise key
+        band_noise_key = jax.random.fold_in(key_noise_base, band_idx)
+
+        obs_wide, obs_deep, obs_deep_noise = make_jax_galsim_simple_sim_jitted(
+            band_noise_key,  # Noise key (different per band)
+            g1=g1,
+            g2=g2,
+            s2n=band_s2n,
+            deep_noise_fac=deep_noise_fac,
+            deep_psf_fac=deep_psf_fac,
+            max_n_objs=max_n_objs,
+            scale=scale,
+            dim=dim,
+            dim_psf=dim_psf,
+            buff=buff,
+            obj_flux_factor=band_obj_flux_factor,
+            psf_fft_size=psf_fft_size,
+            image_fft_size=image_fft_size,
+            key_positions=key_positions,  # Position key (same for all bands)
+        )
+
+        obs_wide_dict[band] = obs_wide
+        obs_deep_dict[band] = obs_deep
+        obs_deep_noise_dict[band] = obs_deep_noise
+
+    return obs_wide_dict, obs_deep_dict, obs_deep_noise_dict
