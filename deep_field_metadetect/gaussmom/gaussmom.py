@@ -9,10 +9,10 @@ from deep_field_metadetect.gaussmom.gaussmom_core import (
     GaussMomData,
     GaussMomObs,
 )
-from deep_field_metadetect.gaussmom.stats import get_ratio_var
 from deep_field_metadetect.gaussmom.utils import (
     _eval_gauss2d,
     _fwhm_to_T,
+    _get_ratio_error,
 )
 
 
@@ -98,7 +98,7 @@ def _set_T_Terr_Tflags(sums, sums_cov, mt_ind, mf_ind, res_T_flags):
     def pos_var_fn(_):
         def pos_flux_fn(_):
             res_T = sums[mt_ind] / sums[mf_ind]
-            res_T_err = get_ratio_error(
+            res_T_err = _get_ratio_error(
                 sums[mt_ind],
                 sums[mf_ind],
                 sums_cov[mt_ind, mt_ind],
@@ -218,14 +218,14 @@ def _compute_shape_params(
                 res_e = jnp.array([res_e1, res_e2])
                 e_err = jnp.array(
                     [
-                        get_ratio_error(
+                        _get_ratio_error(
                             sums[m1_ind],
                             sums[mt_ind],
                             sums_cov[m1_ind, m1_ind],
                             sums_cov[mt_ind, mt_ind],
                             sums_cov[m1_ind, mt_ind],
                         ),
-                        get_ratio_error(
+                        _get_ratio_error(
                             sums[m2_ind],
                             sums[mt_ind],
                             sums_cov[m2_ind, m2_ind],
@@ -443,7 +443,7 @@ def _add_moments_by_name(res):
 
             def pos_fn(_):
                 val = res.sums[ind] / fsum
-                err = get_ratio_error(
+                err = _get_ratio_error(
                     res.sums[ind],
                     res.sums[mf_ind],
                     res.sums_cov[ind, ind],
@@ -466,17 +466,6 @@ def _add_moments_by_name(res):
 
     res = res._replace(**updates)
     return res
-
-
-def get_ratio_error(a, b, var_a, var_b, cov_ab):
-    """
-    Compute the error on the ratio a / b using JAX.
-    """
-    var = get_ratio_var(a, b, var_a, var_b, cov_ab)
-
-    var = jnp.clip(var, 0.0, jnp.inf)
-    error = jnp.sqrt(var)
-    return error
 
 
 @jax.tree_util.register_pytree_node_class
