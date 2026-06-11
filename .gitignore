@@ -161,3 +161,5 @@ cython_debug/
 
 # version stuff
 deep_field_metadetect/_version.py
+
+*.DS_Store
