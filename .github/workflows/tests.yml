@@ -67,8 +67,7 @@ jobs:
             --cov-report=xml \
             --cov-report=term-missing \
             --durations 10 \
-            deep_field_metadetect \
-            -k test_deep_metacal_smoke
+            deep_field_metadetect
 
       - name: upload codecov
         uses: codecov/codecov-action@v4
