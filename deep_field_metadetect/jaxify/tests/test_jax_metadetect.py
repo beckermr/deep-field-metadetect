@@ -3,7 +3,10 @@ import multiprocessing
 import numpy as np
 import pytest
 
-from deep_field_metadetect.jaxify.jax_dfmd_defaults import DEFAULT_FFT_SIZE
+from deep_field_metadetect.jaxify.jax_dfmd_defaults import (
+    DEFAULT_IMAGE_FFT_SIZE,
+    DEFAULT_PSF_FFT_SIZE,
+)
 from deep_field_metadetect.jaxify.jax_metadetect import (
     jax_single_band_deep_field_metadetect,
 )
@@ -137,7 +140,8 @@ def _run_single_sim_jax_and_ngmix(
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
         return_k_info=True,
-        fft_size=DEFAULT_FFT_SIZE,
+        psf_fft_size=DEFAULT_PSF_FFT_SIZE,
+        image_fft_size=DEFAULT_IMAGE_FFT_SIZE,
     )
 
     res_ngmix = non_jax_results["dfmdet_res"]
@@ -158,7 +162,8 @@ def _run_single_sim_jax_and_ngmix(
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
-        fft_size=DEFAULT_FFT_SIZE,
+        psf_fft_size=DEFAULT_PSF_FFT_SIZE,
+        image_fft_size=DEFAULT_IMAGE_FFT_SIZE,
         reconv_psf_dk=dk,
         reconv_psf_kim_size=kim_size,
         use_sep=True,

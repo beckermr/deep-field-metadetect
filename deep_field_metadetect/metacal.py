@@ -98,11 +98,11 @@ def get_max_gauss_reconv_psf(obs_w, obs_d, step=DEFAULT_STEP, dk=None, kim_size=
     )
 
 
-def _render_psf_and_build_obs(image, obs, reconv_psf, weight_fac=1, fft_size=None):
-    if fft_size is not None:
+def _render_psf_and_build_obs(image, obs, reconv_psf, weight_fac=1, psf_fft_size=None):
+    if psf_fft_size is not None:
         reconv_psf = reconv_psf.withGSParams(
-            minimum_fft_size=fft_size,
-            maximum_fft_size=fft_size,
+            minimum_fft_size=psf_fft_size,
+            maximum_fft_size=psf_fft_size,
         )
 
     pim = reconv_psf.drawImage(
@@ -124,7 +124,7 @@ def _render_psf_and_build_obs(image, obs, reconv_psf, weight_fac=1, fft_size=Non
 
 
 def _metacal_op_g1g2_impl(
-    *, wcs, image, noise, psf_inv, dims, reconv_psf, g1, g2, fft_size=None
+    *, wcs, image, noise, psf_inv, dims, reconv_psf, g1, g2, image_fft_size=None
 ):
     """Run metacal on an ngmix observation.
 
@@ -145,15 +145,15 @@ def _metacal_op_g1g2_impl(
         ]
     )
 
-    if fft_size is not None:
+    if image_fft_size is not None:
         ims = ims.withGSParams(
-            minimum_fft_size=fft_size,
-            maximum_fft_size=fft_size,
+            minimum_fft_size=image_fft_size,
+            maximum_fft_size=image_fft_size,
         )
 
         ns = ns.withGSParams(
-            minimum_fft_size=fft_size,
-            maximum_fft_size=fft_size,
+            minimum_fft_size=image_fft_size,
+            maximum_fft_size=image_fft_size,
         )
 
     ims = ims.drawImage(nx=dims[1], ny=dims[0], wcs=wcs).array
@@ -164,7 +164,7 @@ def _metacal_op_g1g2_impl(
     return ims + ns
 
 
-def metacal_op_g1g2(obs, reconv_psf, g1, g2, fft_size=None):
+def metacal_op_g1g2(obs, reconv_psf, g1, g2, psf_fft_size=None, image_fft_size=None):
     """Run metacal on an ngmix observation."""
     mcal_image = _metacal_op_g1g2_impl(
         wcs=obs.jacobian.get_galsim_wcs(),
@@ -179,10 +179,10 @@ def metacal_op_g1g2(obs, reconv_psf, g1, g2, fft_size=None):
         reconv_psf=reconv_psf,
         g1=g1,
         g2=g2,
-        fft_size=fft_size,
+        image_fft_size=image_fft_size,
     )
     return _render_psf_and_build_obs(
-        mcal_image, obs, reconv_psf, weight_fac=0.5, fft_size=fft_size
+        mcal_image, obs, reconv_psf, weight_fac=0.5, psf_fft_size=psf_fft_size
     )
 
 
@@ -191,7 +191,8 @@ def metacal_op_shears(
     reconv_psf=None,
     shears=None,
     step=DEFAULT_STEP,
-    fft_size=None,
+    psf_fft_size=None,
+    image_fft_size=None,
     reconv_psf_dk=None,
     reconv_psf_kim_size=None,
 ):
@@ -224,13 +225,14 @@ def metacal_op_shears(
             reconv_psf=reconv_psf,
             g1=g1,
             g2=g2,
+            image_fft_size=image_fft_size,
         )
         mcal_res[shear] = _render_psf_and_build_obs(
             mcal_image,
             obs,
             reconv_psf,
             weight_fac=0.5,
-            fft_size=fft_size,
+            psf_fft_size=psf_fft_size,
         )
     return mcal_res
 
@@ -243,7 +245,8 @@ def match_psf(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=None,
+    psf_fft_size=None,
+    image_fft_size=None,
 ):
     """Match the PSF on an ngmix observation to a new PSF."""
     wcs = obs.jacobian.get_galsim_wcs()
@@ -265,16 +268,16 @@ def match_psf(
         [image, galsim.Deconvolve(psf), reconv_psf],
     )
 
-    if fft_size is not None:
+    if image_fft_size is not None:
         ims = ims.withGSParams(
-            minimum_fft_size=fft_size,
-            maximum_fft_size=fft_size,
+            minimum_fft_size=image_fft_size,
+            maximum_fft_size=image_fft_size,
         )
 
     ims = ims.drawImage(nx=obs.image.shape[1], ny=obs.image.shape[0], wcs=wcs).array
     if return_k_info:
         return _render_psf_and_build_obs(
-            ims, obs, reconv_psf, weight_fac=1, fft_size=fft_size
+            ims, obs, reconv_psf, weight_fac=1, psf_fft_size=psf_fft_size
         ), (
             image._stepk,
             image._maxk,
@@ -283,7 +286,7 @@ def match_psf(
         )
 
     return _render_psf_and_build_obs(
-        ims, obs, reconv_psf, weight_fac=1, fft_size=fft_size
+        ims, obs, reconv_psf, weight_fac=1, psf_fft_size=psf_fft_size
     )
 
 
@@ -409,7 +412,8 @@ def metacal_wide_and_deep_psf_matched(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=None,
+    psf_fft_size=None,
+    image_fft_size=None,
     reconv_psf_dk=None,
     reconv_psf_kim_size=None,
 ):
@@ -456,10 +460,14 @@ def metacal_wide_and_deep_psf_matched(
         Force stepk for drawing PSF images
         Defaults to 0.0, which lets Galsim choose the value.
         Used mainly for testing.
-    fft_size: int, optional
-        To fix max and min values of FFT size.
+    psf_fft_size : int, optional
+        FFT size for PSF rendering operations.
         Defaults to None which lets Galsim determine the values.
-        Used mainly to test against Galsim.
+        Used mainly to test against JAXGalsim.
+    image_fft_size : int, optional
+        FFT size for image convolution operations.
+        Defaults to None which lets Galsim determine the values.
+        Used mainly to test against JAXGalsim.
     reconv_psf_dk: float
         The Fourier-space pixel scale used for reconv_psf computation
         Default None let's Galsim fix the value
@@ -490,7 +498,8 @@ def metacal_wide_and_deep_psf_matched(
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
-        fft_size=fft_size,
+        psf_fft_size=psf_fft_size,
+        image_fft_size=image_fft_size,
     )
 
     if return_k_info:
@@ -500,7 +509,14 @@ def metacal_wide_and_deep_psf_matched(
     if not skip_obs_wide_corrections:
         mcal_obs_wide = add_ngmix_obs(
             mcal_obs_wide,
-            metacal_op_g1g2(obs_deep_noise, reconv_psf, 0, 0, fft_size=fft_size),
+            metacal_op_g1g2(
+                obs_deep_noise,
+                reconv_psf,
+                0,
+                0,
+                psf_fft_size=psf_fft_size,
+                image_fft_size=image_fft_size,
+            ),
             skip_mfrac_for_second=True,
         )
 
@@ -515,7 +531,8 @@ def metacal_wide_and_deep_psf_matched(
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
         return_k_info=False,
-        fft_size=fft_size,
+        psf_fft_size=None,
+        image_fft_size=None,
     )
 
     # now run mcal on deep
@@ -524,7 +541,8 @@ def metacal_wide_and_deep_psf_matched(
         reconv_psf=reconv_psf,
         shears=shears,
         step=step,
-        fft_size=fft_size,
+        psf_fft_size=psf_fft_size,
+        image_fft_size=image_fft_size,
         reconv_psf_dk=reconv_psf_dk,
         reconv_psf_kim_size=reconv_psf_kim_size,
     )

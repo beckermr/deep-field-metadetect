@@ -163,18 +163,18 @@ def jax_get_max_gauss_reconv_psf(obs_w, obs_d, dk, kim_size, step=DEFAULT_STEP):
     )
 
 
-@partial(jax.jit, static_argnames=["nxy_psf", "fft_size"])
+@partial(jax.jit, static_argnames=["nxy_psf", "psf_fft_size"])
 def _jax_render_psf_and_build_obs(
     image,
     dfmd_obs,
     reconv_psf,
     nxy_psf,
     weight_fac=1,
-    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    psf_fft_size=jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
 ):
     reconv_psf = reconv_psf.withGSParams(
-        minimum_fft_size=fft_size,
-        maximum_fft_size=fft_size,
+        minimum_fft_size=psf_fft_size,
+        maximum_fft_size=psf_fft_size,
     )
 
     pim = reconv_psf.drawImage(
@@ -193,7 +193,7 @@ def _jax_render_psf_and_build_obs(
     )
 
 
-@partial(jax.jit, static_argnames=["dims", "fft_size"])
+@partial(jax.jit, static_argnames=["dims", "image_fft_size"])
 def _jax_metacal_op_g1g2_impl(
     *,
     wcs,
@@ -204,7 +204,7 @@ def _jax_metacal_op_g1g2_impl(
     reconv_psf,
     g1,
     g2,
-    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    image_fft_size=jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
 ):
     """Run metacal on an dfmd observation.
 
@@ -226,14 +226,14 @@ def _jax_metacal_op_g1g2_impl(
     )
 
     ims = ims.withGSParams(
-        minimum_fft_size=fft_size,
-        maximum_fft_size=fft_size,
+        minimum_fft_size=image_fft_size,
+        maximum_fft_size=image_fft_size,
     )
     ims = ims.drawImage(nx=dims[1], ny=dims[0], wcs=wcs).array.astype(jnp.float_)
 
     ns = ns.withGSParams(
-        minimum_fft_size=fft_size,
-        maximum_fft_size=fft_size,
+        minimum_fft_size=image_fft_size,
+        maximum_fft_size=image_fft_size,
     )
     ns = jnp.rot90(
         ns.drawImage(nx=dims[1], ny=dims[0], wcs=wcs).array.astype(jnp.float_),
@@ -243,7 +243,13 @@ def _jax_metacal_op_g1g2_impl(
 
 
 def jax_metacal_op_g1g2(
-    dfmd_obs, reconv_psf, g1, g2, nxy_psf, fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE
+    dfmd_obs,
+    reconv_psf,
+    g1,
+    g2,
+    nxy_psf,
+    psf_fft_size=jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
+    image_fft_size=jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
 ):
     """Run metacal on an dfmd observation with specified shear.
 
@@ -259,9 +265,12 @@ def jax_metacal_op_g1g2(
         g2 shear components to apply.
     nxy_psf : int
         Size of the PSF image in pixels.
-    fft_size : int, optional
-        FFT size for convolution operations.
-        Default is jax_dfmd_defaults.DEFAULT_FFT_SIZE.
+    psf_fft_size : int, optional
+        FFT size for PSF rendering operations.
+        Default is jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE.
+    image_fft_size : int, optional
+        FFT size for image convolution operations.
+        Default is jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE.
 
     Returns
     -------
@@ -281,7 +290,7 @@ def jax_metacal_op_g1g2(
         reconv_psf=reconv_psf,
         g1=g1,
         g2=g2,
-        fft_size=fft_size,
+        image_fft_size=image_fft_size,
     )
 
     return _jax_render_psf_and_build_obs(
@@ -290,7 +299,7 @@ def jax_metacal_op_g1g2(
         reconv_psf,
         nxy_psf=nxy_psf,
         weight_fac=0.5,
-        fft_size=fft_size,
+        psf_fft_size=psf_fft_size,
     )
 
 
@@ -299,7 +308,8 @@ def jax_metacal_op_g1g2(
     static_argnames=[
         "nxy_psf",
         "shears",
-        "fft_size",
+        "psf_fft_size",
+        "image_fft_size",
         "reconv_psf_dk",
         "reconv_psf_kim_size",
     ],
@@ -310,7 +320,8 @@ def jax_metacal_op_shears(
     reconv_psf=jax_galsim.Gaussian(sigma=0.0).withFlux(1.0),
     shears=DEFAULT_SHEARS,
     step=DEFAULT_STEP,
-    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    psf_fft_size=jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
+    image_fft_size=jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
     reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
     reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
 ):
@@ -331,9 +342,12 @@ def jax_metacal_op_shears(
         Shear identifiers to process (default is DEFAULT_SHEARS).
     step : float, optional
         Shear step magnitude (default is DEFAULT_STEP).
-    fft_size : int, optional
-        FFT size for convolution operations.
-        Default is jax_dfmd_defaults.DEFAULT_FFT_SIZE.
+    psf_fft_size : int, optional
+        FFT size for PSF rendering operations.
+        Default is jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE.
+    image_fft_size : int, optional
+        FFT size for image convolution operations.
+        Default is jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE.
     reconv_psf_dk: float
         The Fourier-space pixel scale used for reconv psf computation.
         Default: jax_dfmd_defaults.DEFAULT_RECONV_DK
@@ -381,7 +395,7 @@ def jax_metacal_op_shears(
             reconv_psf=reconv_psf,
             g1=g1,
             g2=g2,
-            fft_size=fft_size,
+            image_fft_size=image_fft_size,
         )
         return _jax_render_psf_and_build_obs(
             mcal_image,
@@ -389,7 +403,7 @@ def jax_metacal_op_shears(
             reconv_psf,
             nxy_psf=nxy_psf,
             weight_fac=0.5,
-            fft_size=fft_size,
+            psf_fft_size=psf_fft_size,
         )
 
     # Use vmap to parallelize across shears
@@ -414,7 +428,8 @@ def jax_metacal_op_shears(
         "force_maxk_field",
         "force_stepk_psf",
         "force_maxk_psf",
-        "fft_size",
+        "psf_fft_size",
+        "image_fft_size",
     ],
 )
 def jax_match_psf(
@@ -427,7 +442,8 @@ def jax_match_psf(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    psf_fft_size=jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
+    image_fft_size=jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
 ):
     """Match the PSF on an dfmd observation to a new PSF."""
     wcs = dfmd_obs.wcs.local()
@@ -447,18 +463,18 @@ def jax_match_psf(
     ims = jax_galsim.Convolve([image, jax_galsim.Deconvolve(psf), reconv_psf])
 
     ims = ims.withGSParams(
-        minimum_fft_size=fft_size,
-        maximum_fft_size=fft_size,
+        minimum_fft_size=image_fft_size,
+        maximum_fft_size=image_fft_size,
     )
     ims = ims.drawImage(nx=nxy, ny=nxy, wcs=wcs).array.astype(jnp.float_)
 
     if return_k_info:
         return _jax_render_psf_and_build_obs(
-            ims, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1
+            ims, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1, psf_fft_size=psf_fft_size
         ), (image.stepk, image.maxk, psf.stepk, psf.maxk)
     else:
         return _jax_render_psf_and_build_obs(
-            ims, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1
+            ims, dfmd_obs, reconv_psf, nxy_psf, weight_fac=1, psf_fft_size=psf_fft_size
         )
 
 
@@ -636,7 +652,8 @@ def get_jax_galsim_object_from_dfmd_obs_nopix(dfmd_obs, kind="image"):
         "force_maxk_field",
         "force_stepk_psf",
         "force_maxk_psf",
-        "fft_size",
+        "psf_fft_size",
+        "image_fft_size",
         "reconv_psf_dk",
         "reconv_psf_kim_size",
     ],
@@ -658,7 +675,8 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    psf_fft_size=jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
+    image_fft_size=jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
     reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
     reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
 ):
@@ -708,10 +726,12 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
         Force stepk for drawing PSF images
         Defaults to 0.0, which lets Galsim choose the value.
         Used mainly for testing.
-    fft_size: int, optional
-        To fix max and min values of FFT size.
-        Defaults to None which lets Galsim determine the values.
-        Used mainly to test against JaxGalsim.
+    psf_fft_size : int, optional
+        FFT size for PSF rendering operations.
+        Default is jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE.
+    image_fft_size : int, optional
+        FFT size for image convolution operations.
+        Default is jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE.
     reconv_psf_dk: float
         The Fourier-space pixel scale used for reconv psf computation.
         Default: jax_dfmd_defaults.DEFAULT_RECONV_DK
@@ -741,7 +761,8 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
-        fft_size=fft_size,
+        psf_fft_size=psf_fft_size,
+        image_fft_size=image_fft_size,
     )
 
     if return_k_info:
@@ -750,7 +771,15 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
     if not skip_obs_wide_corrections:
         mcal_obs_wide = jax_add_dfmd_obs(
             mcal_obs_wide,
-            jax_metacal_op_g1g2(obs_deep_noise, reconv_psf, 0, 0, nxy_psf=nxy_psf),
+            jax_metacal_op_g1g2(
+                obs_deep_noise,
+                reconv_psf,
+                0,
+                0,
+                nxy_psf=nxy_psf,
+                psf_fft_size=psf_fft_size,
+                image_fft_size=image_fft_size,
+            ),
             skip_mfrac_for_second=True,
         )
 
@@ -765,7 +794,8 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
-        fft_size=fft_size,
+        psf_fft_size=psf_fft_size,
+        image_fft_size=image_fft_size,
     )
 
     # now run mcal on deep
@@ -775,7 +805,8 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
         shears=shears,
         step=step,
         nxy_psf=nxy_psf,
-        fft_size=fft_size,
+        psf_fft_size=psf_fft_size,
+        image_fft_size=image_fft_size,
         reconv_psf_dk=reconv_psf_dk,
         reconv_psf_kim_size=reconv_psf_kim_size,
     )  # Note at this point we should already have the reconv_psf
@@ -817,7 +848,8 @@ def _jax_helper_metacal_wide_and_deep_psf_matched(
         "force_maxk_field",
         "force_stepk_psf",
         "force_maxk_psf",
-        "fft_size",
+        "psf_fft_size",
+        "image_fft_size",
         "reconv_psf_dk",
         "reconv_psf_kim_size",
     ],
@@ -838,7 +870,8 @@ def jax_metacal_wide_and_deep_psf_matched(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    psf_fft_size=jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
+    image_fft_size=jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
     reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
     reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
 ):
@@ -886,10 +919,12 @@ def jax_metacal_wide_and_deep_psf_matched(
         Force stepk for drawing PSF images
         Defaults to 0.0, which lets Galsim choose the value.
         Used mainly for testing.
-    fft_size: int, optional
-        To fix max and min values of FFT size.
-        Defaults to None which lets Galsim determine the values.
-        Used mainly to test against JaxGalsim.
+    psf_fft_size : int, optional
+        FFT size for PSF rendering operations.
+        Default is jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE.
+    image_fft_size : int, optional
+        FFT size for image convolution operations.
+        Default is jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE.
     reconv_psf_dk: float
         The Fourier-space pixel scale used for reconv psf computation.
         Default: jax_dfmd_defaults.DEFAULT_RECONV_DK
@@ -929,7 +964,8 @@ def jax_metacal_wide_and_deep_psf_matched(
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
-        fft_size=fft_size,
+        psf_fft_size=psf_fft_size,
+        image_fft_size=image_fft_size,
     )
 
     return mcal_res

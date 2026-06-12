@@ -48,7 +48,8 @@ def jax_single_band_deep_field_metadetect(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    psf_fft_size=jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
+    image_fft_size=jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
     reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
     reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
     max_objects=jax_dfmd_defaults.MAX_OBJECTS,
@@ -104,10 +105,12 @@ def jax_single_band_deep_field_metadetect(
         Force stepk for drawing PSF images
         Defaults to 0.0, which lets Galsim choose the value.
         Used mainly for testing.
-    fft_size: int, optional
-        To fix max and min values of FFT size.
-        Defaults to None which lets Galsim determine the values.
-        Used mainly to test against JaxGalsim.
+    psf_fft_size : int, optional
+        FFT size for PSF rendering operations.
+        Default is jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE.
+    image_fft_size : int, optional
+        FFT size for image convolution operations.
+        Default is jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE.
     reconv_psf_dk: float
         The Fourier-space pixel scale used for reconv psf computation.
         Default: jax_dfmd_defaults.DEFAULT_RECONV_DK
@@ -131,7 +134,6 @@ def jax_single_band_deep_field_metadetect(
     -------
     result : dict
         A dictionary containing the requested results with the following keys:
-
         - "dfmdet_res" : dict (always present)
             The deep-field metadetection results as a dictionary containing
             detection and measurement results for all shears. Keys include:
@@ -163,7 +165,8 @@ def jax_single_band_deep_field_metadetect(
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
-        fft_size=fft_size,
+        psf_fft_size=psf_fft_size,
+        image_fft_size=image_fft_size,
         reconv_psf_dk=reconv_psf_dk,
         reconv_psf_kim_size=reconv_psf_kim_size,
     )
@@ -251,7 +254,7 @@ def jax_single_band_deep_field_metadetect(
             _interp_mfrac = jax_compute_mfrac_interp_image(
                 mcal_res[shear].mfrac,
                 mcal_res[shear].wcs.local(),
-                fft_size=fft_size,
+                image_fft_size=image_fft_size,
             )
 
             mfrac_vals = jax.vmap(lambda x, y: _interp_mfrac.xValue(x, y))(
@@ -357,7 +360,8 @@ def jax_single_band_deep_field_metadetect(
         "force_maxk_field",
         "force_stepk_psf",
         "force_maxk_psf",
-        "fft_size",
+        "psf_fft_size",
+        "image_fft_size",
         "reconv_psf_dk",
         "reconv_psf_kim_size",
         "max_objects",
@@ -382,7 +386,8 @@ def _jax_multi_band_deep_field_metadetect_core(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    psf_fft_size=jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
+    image_fft_size=jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
     reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
     reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
     max_objects=jax_dfmd_defaults.MAX_OBJECTS,
@@ -444,9 +449,12 @@ def _jax_multi_band_deep_field_metadetect_core(
         Force stepk for drawing PSF images
         Defaults to 0.0, which lets JaxGalsim choose the value.
         Used mainly for testing.
-    fft_size: int, optional
-        To fix max and min values of FFT size.
-        Default: jax_dfmd_defaults.DEFAULT_FFT_SIZE
+    psf_fft_size : int, optional
+        FFT size for PSF rendering operations.
+        Default is jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE.
+    image_fft_size : int, optional
+        FFT size for image convolution operations.
+        Default is jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE.
     reconv_psf_dk: float
         The Fourier-space pixel scale used for reconv psf computation.
         Default: jax_dfmd_defaults.DEFAULT_RECONV_DK
@@ -514,7 +522,8 @@ def _jax_multi_band_deep_field_metadetect_core(
             force_maxk_field=force_maxk_field,
             force_stepk_psf=force_stepk_psf,
             force_maxk_psf=force_maxk_psf,
-            fft_size=fft_size,
+            psf_fft_size=psf_fft_size,
+            image_fft_size=image_fft_size,
             reconv_psf_dk=reconv_psf_dk,
             reconv_psf_kim_size=reconv_psf_kim_size,
         )
@@ -563,7 +572,7 @@ def _jax_multi_band_deep_field_metadetect_core(
                 _interp_mfrac = jax_compute_mfrac_interp_image(
                     mcal_res_dict[band_idx][shear].mfrac,
                     mcal_res_dict[band_idx][shear].wcs.local(),
-                    fft_size=fft_size,
+                    image_fft_size=image_fft_size,
                 )
 
                 mfrac_vals = jax.vmap(lambda x, y: _interp_mfrac.xValue(x, y))(
@@ -669,7 +678,8 @@ def jax_multi_band_deep_field_metadetect(
     force_maxk_field=0.0,
     force_stepk_psf=0.0,
     force_maxk_psf=0.0,
-    fft_size=jax_dfmd_defaults.DEFAULT_FFT_SIZE,
+    psf_fft_size=jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
+    image_fft_size=jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
     reconv_psf_dk=jax_dfmd_defaults.DEFAULT_RECONV_DK,
     reconv_psf_kim_size=jax_dfmd_defaults.DEFAULT_KIM_SIZE,
     max_objects=jax_dfmd_defaults.MAX_OBJECTS,
@@ -727,9 +737,12 @@ def jax_multi_band_deep_field_metadetect(
         Force stepk for drawing PSF images
         Defaults to 0.0, which lets JaxGalsim choose the value.
         Used mainly for testing.
-    fft_size: int, optional
-        To fix max and min values of FFT size.
-        Default: jax_dfmd_defaults.DEFAULT_FFT_SIZE
+    psf_fft_size : int, optional
+        FFT size for PSF rendering operations.
+        Default is jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE.
+    image_fft_size : int, optional
+        FFT size for image convolution operations.
+        Default is jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE.
     reconv_psf_dk: float
         The Fourier-space pixel scale used for reconv psf computation.
         Default: jax_dfmd_defaults.DEFAULT_RECONV_DK
@@ -812,7 +825,8 @@ def jax_multi_band_deep_field_metadetect(
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
-        fft_size=fft_size,
+        psf_fft_size=psf_fft_size,
+        image_fft_size=image_fft_size,
         reconv_psf_dk=reconv_psf_dk,
         reconv_psf_kim_size=reconv_psf_kim_size,
         max_objects=max_objects,

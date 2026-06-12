@@ -5,7 +5,10 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from deep_field_metadetect.jaxify.jax_dfmd_defaults import DEFAULT_FFT_SIZE
+from deep_field_metadetect.jaxify.jax_dfmd_defaults import (
+    DEFAULT_IMAGE_FFT_SIZE,
+    DEFAULT_PSF_FFT_SIZE,
+)
 from deep_field_metadetect.jaxify.jax_metacal import (
     jax_add_dfmd_obs,
     jax_metacal_op_shears,
@@ -673,7 +676,8 @@ def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix():
         skip_obs_wide_corrections=skip_obs_wide_corrections,
         skip_obs_deep_corrections=skip_obs_deep_corrections,
         return_k_info=True,
-        fft_size=DEFAULT_FFT_SIZE,
+        psf_fft_size=DEFAULT_PSF_FFT_SIZE,
+        image_fft_size=DEFAULT_IMAGE_FFT_SIZE,
         reconv_psf_dk=reconv_psf_dk,
         reconv_psf_kim_size=reconv_psf_kim_size,
     )
@@ -695,7 +699,8 @@ def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix():
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
-        fft_size=DEFAULT_FFT_SIZE,
+        psf_fft_size=DEFAULT_PSF_FFT_SIZE,
+        image_fft_size=DEFAULT_IMAGE_FFT_SIZE,
         reconv_psf_dk=reconv_psf_dk,
         reconv_psf_kim_size=reconv_psf_kim_size,
     )
@@ -819,7 +824,8 @@ def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix_skip_corrections(
         skip_obs_wide_corrections=skip_wide,
         skip_obs_deep_corrections=skip_deep,
         return_k_info=True,
-        fft_size=DEFAULT_FFT_SIZE,
+        psf_fft_size=DEFAULT_PSF_FFT_SIZE,
+        image_fft_size=DEFAULT_IMAGE_FFT_SIZE,
         reconv_psf_dk=reconv_psf_dk,
         reconv_psf_kim_size=reconv_psf_kim_size,
     )
@@ -840,7 +846,8 @@ def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix_skip_corrections(
         force_maxk_field=force_maxk_field,
         force_stepk_psf=force_stepk_psf,
         force_maxk_psf=force_maxk_psf,
-        fft_size=DEFAULT_FFT_SIZE,
+        psf_fft_size=DEFAULT_PSF_FFT_SIZE,
+        image_fft_size=DEFAULT_IMAGE_FFT_SIZE,
         reconv_psf_dk=reconv_psf_dk,
         reconv_psf_kim_size=reconv_psf_kim_size,
     )
