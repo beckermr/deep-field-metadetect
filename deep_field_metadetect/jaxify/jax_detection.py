@@ -1,5 +1,4 @@
 from functools import partial
-from typing import Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -16,7 +15,7 @@ from deep_field_metadetect.jaxify.observation import (
 @partial(jax.jit, static_argnames=["window_size"])
 def local_maxima_filter(
     image: jnp.ndarray,
-    noise: Union[jnp.ndarray, float],
+    noise: jnp.ndarray | float,
     window_size: int = 5,
 ) -> jnp.ndarray:
     """
@@ -53,10 +52,10 @@ def local_maxima_filter(
 @partial(jax.jit, static_argnames=["window_size", "max_objects"])
 def peak_finder(
     image: jnp.ndarray,
-    noise: Union[jnp.ndarray, float],
+    noise: jnp.ndarray | float,
     window_size: int = 5,
     max_objects: int = 100,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
+) -> tuple[jnp.ndarray, jnp.ndarray]:
     """
     Find peaks in an image above a threshold
 
@@ -98,8 +97,8 @@ def peak_finder(
 
 @partial(jax.jit, static_argnames=["window_size"])
 def refine_centroid(
-    image: jnp.ndarray, peak: Tuple[int, int], window_size: int = 5
-) -> Tuple[float, float, bool]:
+    image: jnp.ndarray, peak: tuple[int, int], window_size: int = 5
+) -> tuple[float, float, bool]:
     """
     Refine peak position of single object using intensity-weighted centroid.
 
@@ -203,11 +202,11 @@ def refine_centroid_in_cell(
 @partial(jax.jit, static_argnames=["window_size", "refine_centroids", "max_objects"])
 def detect_galaxies(
     image: jnp.ndarray,
-    noise: Union[jnp.ndarray, float],
+    noise: jnp.ndarray | float,
     window_size: int = 5,
     refine_centroids: bool = True,
     max_objects: int = 100,
-) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """
     Complete galaxy center detection pipeline with JIT compilation support.
 
@@ -263,7 +262,7 @@ def detect_galaxies(
 @partial(jax.jit, static_argnames=["max_iterations"])
 def watershed_segmentation(
     inverted_image: jnp.ndarray,
-    noise: Union[jnp.ndarray, float],
+    noise: jnp.ndarray | float,
     markers: jnp.ndarray,
     mask: jnp.ndarray = None,
     max_iterations: int = 30,
@@ -406,7 +405,7 @@ def watershed_segmentation(
 @partial(jax.jit, static_argnames=["max_iterations"])
 def watershed_from_peaks(
     image: jnp.ndarray,
-    noise: Union[jnp.ndarray, float],
+    noise: jnp.ndarray | float,
     peaks: jnp.ndarray,
     mask: jnp.ndarray = None,
     max_iterations: int = 30,

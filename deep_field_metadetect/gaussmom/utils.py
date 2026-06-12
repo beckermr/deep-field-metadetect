@@ -36,3 +36,34 @@ def _eval_gauss2d(pars, u, v, area):
     chi2 = dcc * vdiff * vdiff + drr * udiff * udiff - 2.0 * drc * vdiff * udiff
 
     return norm * jnp.exp(-0.5 * chi2) * area, norm
+
+
+@jax.jit
+def _get_ratio_var(a, b, var_a, var_b, cov_ab):
+    """
+    Compute the variance of (a/b).
+    """
+
+    # Ensure no division by zero
+    b = jnp.where(
+        b == 0, 1e-100, b
+    )  # TODO: This does not raise a value error like ngmix
+
+    rsq = (1 / b) ** 2
+
+    var = rsq * (var_a + var_b * a**2 / b**2 - 2 * cov_ab * a / b)
+
+    var = jnp.where(var > 1e20, jnp.nan, var)
+    return var
+
+
+@jax.jit
+def _get_ratio_error(a, b, var_a, var_b, cov_ab):
+    """
+    Compute the error on the ratio a / b using JAX.
+    """
+    var = _get_ratio_var(a, b, var_a, var_b, cov_ab)
+
+    var = jnp.clip(var, 0.0, jnp.inf)
+    error = jnp.sqrt(var)
+    return error
