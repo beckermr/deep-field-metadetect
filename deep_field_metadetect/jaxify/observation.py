@@ -46,8 +46,8 @@ class DFMdetPSF:
         self.ignore_zero_weight = ignore_zero_weight
 
     def tree_flatten(self):
-        children = (self.image, self.weight)
-        aux_data = (self.wcs, self.meta, self.store_pixels, self.ignore_zero_weight)
+        children = (self.image, self.weight, self.wcs)
+        aux_data = (self.meta, self.store_pixels, self.ignore_zero_weight)
         return children, aux_data
 
     @classmethod
@@ -55,10 +55,10 @@ class DFMdetPSF:
         return cls(
             image=children[0],
             weight=children[1],
-            wcs=aux_data[0],
-            meta=aux_data[1],
-            store_pixels=aux_data[2],
-            ignore_zero_weight=aux_data[3],
+            wcs=children[2],
+            meta=aux_data[0],
+            store_pixels=aux_data[1],
+            ignore_zero_weight=aux_data[2],
         )
 
     def has_bmask(self):
