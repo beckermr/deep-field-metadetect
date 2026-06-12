@@ -76,6 +76,7 @@ class DFMdetPSF:
     def has_psf(self):
         return False
 
+    @jax.jit
     def replace(self, **kwargs):
         """Create a new instance similar to NamedTuple._replace"""
         new_kwargs = {
