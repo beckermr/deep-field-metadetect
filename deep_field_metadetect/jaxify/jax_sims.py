@@ -5,7 +5,12 @@ import jax.numpy as jnp
 import jax_galsim
 
 from deep_field_metadetect.jaxify import jax_dfmd_defaults
-from deep_field_metadetect.jaxify.observation import DFMdetObservation, DFMdetPSF
+from deep_field_metadetect.jaxify.observation import (
+    DFMdetMultiBandObsList,
+    DFMdetObservation,
+    DFMdetObsList,
+    DFMdetPSF,
+)
 
 
 @partial(
@@ -281,6 +286,25 @@ def make_jax_galsim_simple_sim_jitted(
     return obs_wide, obs_deep, obs_deep_noise
 
 
+@partial(
+    jax.jit,
+    static_argnames=(
+        "bands",
+        "g1",
+        "g2",
+        "s2n",
+        "deep_psf_fac",
+        "max_n_objs",
+        "scale",
+        "dim",
+        "dim_psf",
+        "buff",
+        "obj_flux_factor",
+        "band_flux_factors",
+        "psf_fft_size",
+        "image_fft_size",
+    ),
+)
 def generate_jax_galsim_multiband_sim_observations_jitted(
     key: jax.Array,
     bands: tuple[str, ...] = ("g", "r", "i"),
@@ -295,7 +319,7 @@ def generate_jax_galsim_multiband_sim_observations_jitted(
     dim_psf: int = 53,
     buff: int = 26,
     obj_flux_factor: float = 1.0,
-    band_flux_factors=None,
+    band_flux_factors: tuple[float, ...] = None,
     psf_fft_size: int = jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
     image_fft_size: int = jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
 ):
@@ -327,8 +351,9 @@ def generate_jax_galsim_multiband_sim_observations_jitted(
         Buffer size in pixels from edge for placing galaxies (default: 26)
     obj_flux_factor : float
         Base flux factor
-    band_flux_factors : dict, optional
-        Per-band flux factors
+    band_flux_factors : tuple of float, optional
+        Per-band flux factors as a tuple in the same order as bands.
+        Must have the same length as bands. If None, all bands use factor 1.0.
     psf_fft_size : int
         FFT size for JAX-Galsim drawing PSFs (default: 64)
     image_fft_size : int
@@ -336,34 +361,34 @@ def generate_jax_galsim_multiband_sim_observations_jitted(
 
     Returns
     -------
-    obs_wide_dict : dict
-        Wide field observations by band
-    obs_deep_dict : dict
-        Deep field observations by band
-    obs_deep_noise_dict : dict
-        Deep noise observations by band
+    mb_obs_wide : DFMdetMultiBandObsList
+        Wide field observations for all bands
+    mb_obs_deep : DFMdetMultiBandObsList
+        Deep field observations for all bands
+    mb_obs_deep_noise : DFMdetMultiBandObsList
+        Deep noise observations for all bands
 
     """
-    # Set default band flux factors
+    # If band_flux_factors not provided, use 1.0 for all bands
+    # Since bands is static, this will be resolved at compile time
     if band_flux_factors is None:
-        band_flux_factors = {"g": 0.7, "r": 1.0, "i": 0.8, "z": 0.6}
+        band_flux_factors = tuple(1.0 for _ in bands)
 
-    obs_wide_dict = {}
-    obs_deep_dict = {}
-    obs_deep_noise_dict = {}
+    obs_wide_list = []
+    obs_deep_list = []
+    obs_deep_noise_list = []
 
     # Split the key: position component (same for all bands) and noise base
     key_positions, key_noise_base = jax.random.split(key, 2)
 
-    for band_idx, band in enumerate(bands):
-        # Get band-specific flux factor
-        if band in band_flux_factors:
-            band_obj_flux_factor = obj_flux_factor * band_flux_factors[band]
-        else:
-            band_obj_flux_factor = obj_flux_factor
+    # bands is static: loop unroll
+    for band_idx in range(len(bands)):
+        # Get band-specific flux factor from tuple
+        band_flux_fac = band_flux_factors[band_idx]
+        band_obj_flux_factor = obj_flux_factor * band_flux_fac
 
         # Scale S/N with flux
-        band_s2n = s2n * jnp.sqrt(band_flux_factors.get(band, 1.0))
+        band_s2n = s2n * jnp.sqrt(band_flux_fac)
 
         # Create band-specific noise key
         band_noise_key = jax.random.fold_in(key_noise_base, band_idx)
@@ -386,8 +411,13 @@ def generate_jax_galsim_multiband_sim_observations_jitted(
             key_positions=key_positions,  # Position key (same for all bands)
         )
 
-        obs_wide_dict[band] = obs_wide
-        obs_deep_dict[band] = obs_deep
-        obs_deep_noise_dict[band] = obs_deep_noise
+        obs_wide_list.append(DFMdetObsList([obs_wide]))
+        obs_deep_list.append(DFMdetObsList([obs_deep]))
+        obs_deep_noise_list.append(DFMdetObsList([obs_deep_noise]))
 
-    return obs_wide_dict, obs_deep_dict, obs_deep_noise_dict
+    # Convert to MultiBandObsList
+    mb_obs_wide = DFMdetMultiBandObsList(obs_wide_list)
+    mb_obs_deep = DFMdetMultiBandObsList(obs_deep_list)
+    mb_obs_deep_noise = DFMdetMultiBandObsList(obs_deep_noise_list)
+
+    return mb_obs_wide, mb_obs_deep, mb_obs_deep_noise
