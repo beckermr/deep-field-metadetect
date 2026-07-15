@@ -1,7 +1,5 @@
 """Test multiband simulations with JAX-Galsim and metadetect."""
 
-from typing import Dict, Optional, Tuple
-
 import jax
 import jax.numpy as jnp
 
@@ -18,7 +16,7 @@ from deep_field_metadetect.jaxify.jax_sims import (
 # The return structure needs to be changed for the JAX part
 def _run_single_sim_jax(
     key,
-    bands: Tuple[str, ...] = ("g", "r", "i"),
+    bands: tuple[str, ...] = ("g", "r", "i"),
     s2n: float = 20.0,
     g1: float = 0.0,
     g2: float = 0.0,
@@ -31,13 +29,13 @@ def _run_single_sim_jax(
     reconv_psf_dk: float = jax_dfmd_defaults.DEFAULT_RECONV_DK,
     reconv_psf_kim_size: float = jax_dfmd_defaults.DEFAULT_KIM_SIZE,
     obj_flux_factor: float = 1.0,
-    band_flux_factors: Optional[Dict[str, float]] = None,
+    band_flux_factors: dict[str, float] | None = None,
     psf_fft_size: int = jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
     image_fft_size: int = jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
-    detbands: Optional[Tuple[str, ...]] = None,
+    detbands: tuple[str, ...] | None = None,
     skip_obs_wide_corrections: bool = False,
     skip_obs_deep_corrections: bool = False,
-) -> Dict:
+) -> dict:
     """Run a single multi-band simulation with JAX-Galsim and metadetect.
 
     Parameters
@@ -127,7 +125,7 @@ def _run_single_sim_jax(
 
 def run_jax_sim_pair(
     key: jax.Array,
-    bands: Tuple[str, ...] = ("g", "r", "i"),
+    bands: tuple[str, ...] = ("g", "r", "i"),
     s2n: float = 20.0,
     shear_magnitude: float = 0.02,
     deep_noise_fac: float = 1.0 / jnp.sqrt(10),
@@ -139,13 +137,13 @@ def run_jax_sim_pair(
     reconv_psf_dk: float = jax_dfmd_defaults.DEFAULT_RECONV_DK,
     reconv_psf_kim_size: float = jax_dfmd_defaults.DEFAULT_KIM_SIZE,
     obj_flux_factor: float = 1.0,
-    band_flux_factors: Optional[Dict[str, float]] = None,
+    band_flux_factors: dict[str, float] | None = None,
     psf_fft_size: int = jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
     image_fft_size: int = jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
-    detbands: Optional[Tuple[str, ...]] = None,
+    detbands: tuple[str, ...] | None = None,
     skip_obs_wide_corrections: bool = False,
     skip_obs_deep_corrections: bool = False,
-) -> Tuple[Dict, Dict]:
+) -> tuple[dict, dict]:
     """Run a pair of simulations with +/- shear for calibration.
 
     Parameters

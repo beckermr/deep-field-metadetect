@@ -1,5 +1,4 @@
 from functools import partial
-from typing import Tuple
 
 import jax
 import jax.numpy as jnp
@@ -140,7 +139,7 @@ def make_jax_galsim_simple_sim_jitted(
     psf_fft_size: int = jax_dfmd_defaults.DEFAULT_PSF_FFT_SIZE,
     image_fft_size: int = jax_dfmd_defaults.DEFAULT_IMAGE_FFT_SIZE,
     key_positions: jax.Array = None,
-) -> Tuple[DFMdetObservation, DFMdetObservation, DFMdetObservation]:
+) -> tuple[DFMdetObservation, DFMdetObservation, DFMdetObservation]:
     """JIT-compatible simple simulation using JAX-Galsim.
 
     Note: key differences compared to non-jax version:
@@ -284,7 +283,7 @@ def make_jax_galsim_simple_sim_jitted(
 
 def generate_jax_galsim_multiband_sim_observations_jitted(
     key: jax.Array,
-    bands: Tuple[str, ...] = ("g", "r", "i"),
+    bands: tuple[str, ...] = ("g", "r", "i"),
     g1: float = 0.0,
     g2: float = 0.0,
     s2n: float = 20.0,
