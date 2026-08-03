@@ -32,6 +32,63 @@ from deep_field_metadetect.jaxify.observation import (
 logger = logging.getLogger(__name__)
 
 
+def convert_multiband_dfmdet_result_to_strings(result, bands, shears=None):
+    """Convert integer indices in dfmdet result to string labels.
+
+    Parameters
+    ----------
+    result : dict
+        Result from jitted core function with integer indices.
+        Must contain "dfmdet_res" key with "mdet_step_idx" and "band_idx" fields.
+    bands : tuple of str
+        Band names (e.g., ("g", "r", "i"))
+    shears : tuple, optional
+        Shear names (e.g., ("noshear", "1p", "1m", "2p", "2m"))
+        If None, uses DEFAULT_SHEARS
+
+    Returns
+    -------
+    result : dict
+        New result dict (copy) with string labels instead of integer indices.
+        "mdet_step_idx" is replaced with "mdet_step" (strings)
+        "band_idx" is replaced with "band" (strings)
+        If present, "kinfo" and "mcal_res" tuples are converted to dicts
+    """
+    if shears is None:
+        shears = DEFAULT_SHEARS
+
+    updated_result = result.copy()
+    dfmdet_res = updated_result["dfmdet_res"].copy()
+
+    # Convert mdet_step_idx and band_idx integers to string labels
+    mdet_step_strings = np.array(
+        [shears[int(idx)] for idx in dfmdet_res["mdet_step_idx"]], dtype="U7"
+    )
+    dfmdet_res["mdet_step"] = mdet_step_strings
+    del dfmdet_res["mdet_step_idx"]
+
+    band_strings = np.array(
+        [bands[int(idx)] for idx in dfmdet_res["band_idx"]], dtype="U10"
+    )
+    dfmdet_res["band"] = band_strings
+    del dfmdet_res["band_idx"]
+
+    updated_result["dfmdet_res"] = dfmdet_res
+
+    # Convert kinfo and mcal_res tuple to dict
+    if "kinfo" in updated_result:
+        kinfo_tuple = updated_result["kinfo"]
+        updated_result["kinfo"] = {bands[i]: kinfo_tuple[i] for i in range(len(bands))}
+
+    if "mcal_res" in updated_result:
+        mcal_res_tuple = updated_result["mcal_res"]
+        updated_result["mcal_res"] = {
+            bands[i]: mcal_res_tuple[i] for i in range(len(bands))
+        }
+
+    return updated_result
+
+
 @partial(
     jax.jit,
     static_argnames=[
