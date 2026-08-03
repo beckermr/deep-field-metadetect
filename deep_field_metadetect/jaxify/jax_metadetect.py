@@ -723,7 +723,7 @@ def jax_single_band_deep_field_metadetect(
         "return_debug_info",
     ],
 )
-def _jax_multi_band_deep_field_metadetect_core(
+def jax_multi_band_deep_field_metadetect_jitted(
     mb_obs_wide,
     mb_obs_deep,
     mb_obs_deep_noise,
@@ -837,7 +837,7 @@ def _jax_multi_band_deep_field_metadetect_core(
             Keys include:
             - id, x, y, mdet_step_idx (int), band_idx (int), bmask_flags, mfrac
             - wmom_flags, wmom_g1, wmom_g2, wmom_T_ratio, wmom_psf_T, wmom_s2n
-            Note: mdet_step_idx and band_idx are integers. Wrapper function
+            NOTE: mdet_step_idx and band_idx are integers. Wrapper function
             to converts them to strings.
         - "kinfo" : tuple (only if return_k_info=True)
             Tuple containing (_force_stepk_field, _force_maxk_field,
@@ -1152,17 +1152,13 @@ def jax_multi_band_deep_field_metadetect(
 
     n_bands = len(bands)
 
-    if detbands is None:
-        detband_indices = None
+    if detbands is not None:
+        detband_indices = tuple(bands.index(band) for band in detbands)
     else:
-        band_to_idx = {band: idx for idx, band in enumerate(bands)}
-        detband_indices = tuple(band_to_idx[band] for band in detbands)
-
-    if shears is None:
-        shears = DEFAULT_SHEARS
+        detband_indices = tuple(range(n_bands))
 
     # Call jitted core function
-    result = _jax_multi_band_deep_field_metadetect_core(
+    result = jax_multi_band_deep_field_metadetect_jitted(
         mb_obs_wide=mb_obs_wide,
         mb_obs_deep=mb_obs_deep,
         mb_obs_deep_noise=mb_obs_deep_noise,
@@ -1188,37 +1184,7 @@ def jax_multi_band_deep_field_metadetect(
         return_debug_info=return_debug_info,
     )
 
-    dfmdet_res = result["dfmdet_res"]
-
-    # Log detection counts (happens outside jit)
-    for shear_idx, shear in enumerate(shears):
-        mask = dfmdet_res["mdet_step_idx"] == shear_idx
-        num_detections = jnp.sum(mask).item()
-        logger.debug("shear=%s, num detections: %d", shear, num_detections)
-
-    # Convert indices to strings
-    mdet_step_strings = np.array(
-        [shears[int(idx)] for idx in dfmdet_res["mdet_step_idx"]], dtype="U7"
-    )
-    dfmdet_res["mdet_step"] = mdet_step_strings
-    del dfmdet_res["mdet_step_idx"]
-
-    band_strings = np.array(
-        [bands[int(idx)] for idx in dfmdet_res["band_idx"]], dtype="U10"
-    )
-    dfmdet_res["band"] = band_strings
-    del dfmdet_res["band_idx"]
-
-    result["dfmdet_res"] = dfmdet_res
-
-    # Convert kinfo tuple to dict
-    if return_k_info:
-        kinfo_tuple = result["kinfo"]
-        result["kinfo"] = {bands[i]: kinfo_tuple[i] for i in range(len(bands))}
-
-    # Convert mcal_res tuple to dict
-    if return_debug_info:
-        mcal_res_tuple = result["mcal_res"]
-        result["mcal_res"] = {bands[i]: mcal_res_tuple[i] for i in range(len(bands))}
+    # Convert integer indices to string labels
+    result = convert_multiband_dfmdet_result_to_strings(result, bands, shears)
 
     return result
