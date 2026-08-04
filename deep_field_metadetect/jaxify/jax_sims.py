@@ -115,15 +115,11 @@ def _make_jax_galsim_single_sim_jitted(
 @partial(
     jax.jit,
     static_argnames=(
-        "g1",
-        "g2",
-        "deep_psf_fac",
         "max_n_objs",
         "scale",
         "dim",
         "dim_psf",
         "buff",
-        "obj_flux_factor",
         "psf_fft_size",
         "image_fft_size",
     ),
@@ -156,15 +152,15 @@ def make_jax_galsim_simple_sim_jitted(
     key : jax.Array
         JAX random key for noise (dynamic argument)
     g1 : float
-        Shear component 1 (static)
+        Shear component 1
     g2 : float
-        Shear component 2 (static)
+        Shear component 2
     s2n : float
-        Signal-to-noise ratio (static)
+        Signal-to-noise ratio
     deep_noise_fac : float
-        Deep field noise factor (static)
+        Deep field noise factor
     deep_psf_fac : float
-        Deep field PSF size factor (static)
+        Deep field PSF size factor
     max_n_objs : int
         Fixed number of objects (static)
     scale : float
@@ -176,7 +172,7 @@ def make_jax_galsim_simple_sim_jitted(
     buff : int
         Buffer size in pixels from edge for placing galaxies (static, default: 26)
     obj_flux_factor : float
-        Flux scaling factor (static)
+        Flux scaling factor
     psf_fft_size : int
         FFT size for JAX-Galsim drawing PSFs (static, default: 64)
     image_fft_size : int
@@ -290,17 +286,11 @@ def make_jax_galsim_simple_sim_jitted(
     jax.jit,
     static_argnames=(
         "bands",
-        "g1",
-        "g2",
-        "s2n",
-        "deep_psf_fac",
         "max_n_objs",
         "scale",
         "dim",
         "dim_psf",
         "buff",
-        "obj_flux_factor",
-        "band_flux_factors",
         "psf_fft_size",
         "image_fft_size",
     ),
@@ -330,7 +320,7 @@ def generate_jax_galsim_multiband_sim_observations_jitted(
     key : jax.Array
         JAX random key
     bands : tuple of str
-        Band names
+        Band names (static)
     g1, g2 : float
         Shear components
     s2n : float
@@ -340,24 +330,24 @@ def generate_jax_galsim_multiband_sim_observations_jitted(
     deep_psf_fac : float
         Deep field PSF size factor
     max_n_objs : int
-        Fixed number of objects
+        Fixed number of objects (static)
     scale : float
-        Pixel scale in arcsec/pixel
+        Pixel scale in arcsec/pixel (static)
     dim : int
-        Image dimension
+        Image dimension (static)
     dim_psf : int
-        PSF dimension
+        PSF dimension (static)
     buff : int
-        Buffer size in pixels from edge for placing galaxies (default: 26)
+        Buffer size in pixels from edge for placing galaxies (static, default: 26)
     obj_flux_factor : float
         Base flux factor
     band_flux_factors : tuple of float, optional
         Per-band flux factors as a tuple in the same order as bands.
         Must have the same length as bands. If None, all bands use factor 1.0.
     psf_fft_size : int
-        FFT size for JAX-Galsim drawing PSFs (default: 64)
+        FFT size for JAX-Galsim drawing PSFs (static, default: 64)
     image_fft_size : int
-        FFT size for JAX-Galsim drawing object images (default: 256)
+        FFT size for JAX-Galsim drawing object images (static, default: 256)
 
     Returns
     -------
