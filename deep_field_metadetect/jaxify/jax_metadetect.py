@@ -1150,12 +1150,12 @@ def jax_multi_band_deep_field_metadetect(
         [DFMdetObsList([obs_deep_noise[band]]) for band in bands]
     )
 
+    # Convert band names to indices for jitted function
     n_bands = len(bands)
-
     if detbands is not None:
         detband_indices = tuple(bands.index(band) for band in detbands)
     else:
-        detband_indices = tuple(range(n_bands))
+        detband_indices = None  # all are used
 
     # Call jitted core function
     result = jax_multi_band_deep_field_metadetect_jitted(
