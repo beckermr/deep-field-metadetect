@@ -24,6 +24,28 @@ from deep_field_metadetect.utils import (
 )
 
 
+@partial(
+    jax.jit,
+    static_argnames=(
+        "bands",
+        "n_bands",
+        "detband_indices",
+        "s2n",
+        "deep_psf_fac",
+        "max_n_objs",
+        "scale",
+        "dim",
+        "dim_psf",
+        "reconv_psf_dk",
+        "reconv_psf_kim_size",
+        "obj_flux_factor",
+        "band_flux_factors",
+        "psf_fft_size",
+        "image_fft_size",
+        "skip_obs_wide_corrections",
+        "skip_obs_deep_corrections",
+    ),
+)
 def _run_single_sim_jax(
     key,
     bands: tuple[str, ...] = ("g", "r", "i"),
