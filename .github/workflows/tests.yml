@@ -59,6 +59,7 @@ jobs:
       - name: run pytest
         run: |
           export JAX_ENABLE_X64=True
+          export JAX_TRACEBACK_FILTERING=off
           pytest \
             -vvs \
             --cov=deep_field_metadetect \
