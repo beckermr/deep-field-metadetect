@@ -1,18 +1,14 @@
 """Test vmapping jax_multi_band_deep_field_metadetect_jitted."""
 
 import jax
-import numpy as np
+import jax.numpy as np
 
-from deep_field_metadetect.benchmark.jax_simulation import (
-    generate_multiband_sim_observations,
-)
 from deep_field_metadetect.jaxify import jax_dfmd_defaults
 from deep_field_metadetect.jaxify.jax_metadetect import (
     jax_multi_band_deep_field_metadetect_jitted,
 )
-from deep_field_metadetect.jaxify.observation import (
-    DFMdetMultiBandObsList,
-    DFMdetObsList,
+from deep_field_metadetect.jaxify.jax_sims import (
+    generate_jax_galsim_multiband_sim_observations_jitted,
 )
 from deep_field_metadetect.metacal import DEFAULT_SHEARS
 
@@ -33,21 +29,15 @@ def test_vmap_metadetect():
     # Generate observations for each field
     obs_list = []
     for i, key in enumerate(keys):
-        obs_w_dict, obs_d_dict, obs_dn_dict = generate_multiband_sim_observations(
-            key, bands=bands, n_objs=n_objs, dim=dim
+        mb_obs_wide, mb_obs_deep, mb_obs_deep_noise = (
+            generate_jax_galsim_multiband_sim_observations_jitted(
+                key,
+                bands=bands,
+                max_n_objs=n_objs,
+                dim=dim,
+                dim_psf=dim,
+            )
         )
-
-        # Create MultiBandObsList for this field
-        mb_obs_wide = DFMdetMultiBandObsList(
-            [DFMdetObsList([obs_w_dict[band]]) for band in bands]
-        )
-        mb_obs_deep = DFMdetMultiBandObsList(
-            [DFMdetObsList([obs_d_dict[band]]) for band in bands]
-        )
-        mb_obs_deep_noise = DFMdetMultiBandObsList(
-            [DFMdetObsList([obs_dn_dict[band]]) for band in bands]
-        )
-
         obs_list.append((mb_obs_wide, mb_obs_deep, mb_obs_deep_noise))
 
     # Stack observations into batched structure
