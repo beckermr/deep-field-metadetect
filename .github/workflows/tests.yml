@@ -59,7 +59,6 @@ jobs:
       - name: run pytest
         run: |
           export JAX_ENABLE_X64=True
-          export JAX_TRACEBACK_FILTERING=off
           pytest \
             -vvs \
             --cov=deep_field_metadetect \
@@ -68,7 +67,7 @@ jobs:
             --cov-report=xml \
             --cov-report=term-missing \
             --durations 10 \
-            deep_field_metadetect/jaxify/tests/test_vmap_metadetect.py
+            deep_field_metadetect/
 
       - name: upload codecov
         uses: codecov/codecov-action@v4
