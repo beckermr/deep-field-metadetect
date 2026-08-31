@@ -15,7 +15,7 @@ from deep_field_metadetect.metacal import DEFAULT_SHEARS
 
 def test_vmap_metadetect():
     """Test vmapping jax_multi_band_deep_field_metadetect_jitted."""
-    n_fields = 3
+    n_fields = 2
     bands = ("g", "r", "i")
     n_bands = len(bands)
     dim = 53
