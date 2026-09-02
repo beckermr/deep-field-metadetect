@@ -92,6 +92,144 @@ def convert_multiband_dfmdet_result_to_strings(result, bands, shears=None):
 @partial(
     jax.jit,
     static_argnames=[
+        "max_objects",
+        "moment_stamp_size",
+        "image_fft_size",
+        "shear_idx",
+        "band_idx",
+    ],
+)
+def _process_detections_for_shear(
+    mcal_obs,
+    x_coords,
+    y_coords,
+    det_flag,
+    bmask_flags,
+    psf_res,
+    max_objects,
+    moment_stamp_size,
+    image_fft_size,
+    shear_idx,
+    band_idx=None,
+):
+    """JIT-compiled post-detection processing for a single shear.
+
+    This function handles everything detection:
+    - mfrac computation
+    - sub-observation extraction
+    - moment measurements
+
+    Parameters
+    ----------
+    mcal_obs : DFMdetObservation
+        Metacalibrated observation for this shear
+    x_coords : array
+        Detection x coordinates (padded to max_objects)
+    y_coords : array
+        Detection y coordinates (padded to max_objects)
+    det_flag : array
+        Detection flags (1=real, 0=fill)
+    bmask_flags : array
+        Bmask flags at detection locations
+    psf_res : dict
+        PSF measurement result
+    max_objects : int
+        Maximum number of objects
+    moment_stamp_size : int
+        Stamp size for moments
+    image_fft_size : int
+        FFT size for images
+    shear_idx : int
+        Shear index
+    band_idx : int, optional
+        Band index. If provided, adds 'band_idx' field to results.
+        Default is None (single-band mode).
+
+    Returns
+    -------
+    batch_results : dict
+        Detection results for this shear
+    """
+
+    # Compute mfrac values
+    def get_mfrac_values():
+        """Compute interpolated mfrac values."""
+        _interp_mfrac = jax_compute_mfrac_interp_image(
+            mcal_obs.mfrac,
+            mcal_obs.wcs.local(),
+            image_fft_size=image_fft_size,
+        )
+        mfrac_vals = jax.vmap(lambda x, y: _interp_mfrac.xValue(x, y))(
+            x_coords, y_coords
+        )
+        # For fill values (-1, -1), the interpolation will not make sense
+        mfrac_vals = jnp.where(det_flag == 1, mfrac_vals, 0.0)
+        return mfrac_vals
+
+    def get_zero_mfrac():
+        """Return zeros when no mfrac data."""
+        return jnp.zeros(max_objects, dtype=jnp.float64)
+
+    mfrac_vals = jax.lax.cond(
+        jnp.any(mcal_obs.mfrac > 0), get_mfrac_values, get_zero_mfrac
+    )
+
+    # Pad observations once before extracting sub-observations
+    pad_width = moment_stamp_size // 2 + 1
+    padded_mbobs = jax_get_mb_obs(mcal_obs, pad_width=pad_width)
+
+    padded_xs = x_coords + pad_width
+    padded_ys = y_coords + pad_width
+
+    # Use batched function to extract all sub-observations at once
+    _, padded_xs_out, padded_ys_out, all_subobs = (
+        jax_batch_generate_mbobs_for_detections(
+            padded_mbobs,
+            xs=padded_xs,
+            ys=padded_ys,
+            box_size=moment_stamp_size,
+        )
+    )
+
+    # Process all detections in batch
+    obj_ids = jnp.arange(1, max_objects + 1, dtype=jnp.int64)
+
+    def process_detection(
+        subobs, obj_id, obj_x, obj_y, bmask_flag, mfrac_val, det_flag_val
+    ):
+        return jax_fit_single_detection(
+            mbobs=subobs[0][0],
+            psf_res=psf_res,
+            obj_id=obj_id,
+            obj_x=obj_x,
+            obj_y=obj_y,
+            shear_idx=shear_idx,
+            bmask_flag=bmask_flag,
+            mfrac_val=mfrac_val,
+            det_flag=det_flag_val,
+        )
+
+    # Vectorize
+    batch_results = jax.vmap(process_detection)(
+        all_subobs,
+        obj_ids,
+        padded_xs_out - pad_width,
+        padded_ys_out - pad_width,
+        bmask_flags,
+        mfrac_vals,
+        det_flag,
+    )
+
+    # Add band_idx if in multiband mode
+    if band_idx is not None:
+        batch_results["band_idx"] = jnp.full(max_objects, band_idx, dtype=jnp.int32)
+
+    return batch_results
+
+
+@partial(
+    jax.jit,
+    static_argnames=[
         "nxy",
         "nxy_psf",
         "shears",
@@ -270,74 +408,19 @@ def _jax_single_band_deep_field_metadetect_core(
         bmask_flags = jnp.where(valid_mask, mcal_res[shear].bmask[iyc, ixc], 0)
         detections.append(detres)
 
-        def get_mfrac_values():
-            """Compute interpolated mfrac values."""
-            _interp_mfrac = jax_compute_mfrac_interp_image(
-                mcal_res[shear].mfrac,
-                mcal_res[shear].wcs.local(),
-                image_fft_size=image_fft_size,
-            )
-
-            mfrac_vals = jax.vmap(lambda x, y: _interp_mfrac.xValue(x, y))(
-                x_coords, y_coords
-            )
-            # For fill values (-1, -1), the interpolation will not make sense
-            mfrac_vals = jnp.where(det_flag == 1, mfrac_vals, 0.0)
-            return mfrac_vals
-
-        def get_zero_mfrac():
-            """Return zeros when no mfrac data."""
-            return jnp.zeros(max_objects, dtype=jnp.float64)
-
-        mfrac_vals = jax.lax.cond(
-            jnp.any(mcal_res[shear].mfrac > 0), get_mfrac_values, get_zero_mfrac
-        )
-
-        # Pad observations once before extracting sub-observations
-        # pad_width is half of moment_stamp_size
-        pad_width = moment_stamp_size // 2 + 1
-        padded_mbobs = jax_get_mb_obs(mcal_res[shear], pad_width=pad_width)
-
-        padded_xs = x_coords + pad_width
-        padded_ys = y_coords + pad_width
-
-        # Use batched function to extract all sub-observations at once
-        _, padded_xs_out, padded_ys_out, all_subobs = (
-            jax_batch_generate_mbobs_for_detections(
-                padded_mbobs,
-                xs=padded_xs,
-                ys=padded_ys,
-                box_size=moment_stamp_size,
-            )
-        )
-
-        # Process all detections in batch
-        obj_ids = jnp.arange(1, max_objects + 1, dtype=jnp.int64)
-
-        def process_detection(
-            subobs, obj_id, obj_x, obj_y, bmask_flag, mfrac_val, det_flag_val
-        ):
-            return jax_fit_single_detection(
-                mbobs=subobs[0][0],
-                psf_res=psf_res,
-                obj_id=obj_id,
-                obj_x=obj_x,
-                obj_y=obj_y,
-                shear_idx=shear_idx,
-                bmask_flag=bmask_flag,
-                mfrac_val=mfrac_val,
-                det_flag=det_flag_val,
-            )
-
-        # Vectorize
-        batch_results = jax.vmap(process_detection)(
-            all_subobs,
-            obj_ids,
-            padded_xs_out - pad_width,
-            padded_ys_out - pad_width,
-            bmask_flags,
-            mfrac_vals,
+        # Use shared jitted function for all post-detection processing
+        # This includes: mfrac computation, sub-obs extraction, and moment measurements
+        batch_results = _process_detections_for_shear(
+            mcal_res[shear],
+            x_coords,
+            y_coords,
             det_flag,
+            bmask_flags,
+            psf_res,
+            max_objects,
+            moment_stamp_size,
+            image_fft_size,
+            shear_idx,
         )
 
         all_detection_results.append(batch_results)
@@ -603,74 +686,19 @@ def jax_single_band_deep_field_metadetect(
 
             detections.append(detres["catalog"])
 
-        def get_mfrac_values():
-            """Compute interpolated mfrac values."""
-            _interp_mfrac = jax_compute_mfrac_interp_image(
-                mcal_res[shear].mfrac,
-                mcal_res[shear].wcs.local(),
-                image_fft_size=image_fft_size,
-            )
-
-            mfrac_vals = jax.vmap(lambda x, y: _interp_mfrac.xValue(x, y))(
-                x_coords, y_coords
-            )
-            # For fill values (-1, -1), the interpolation will not make sense
-            mfrac_vals = jnp.where(det_flag == 1, mfrac_vals, 0.0)
-            return mfrac_vals
-
-        def get_zero_mfrac():
-            """Return zeros when no mfrac data."""
-            return jnp.zeros(max_objects, dtype=jnp.float64)
-
-        mfrac_vals = jax.lax.cond(
-            jnp.any(mcal_res[shear].mfrac > 0), get_mfrac_values, get_zero_mfrac
-        )
-
-        # Pad observations once before extracting sub-observations
-        # pad_width is half of moment_stamp_size
-        pad_width = moment_stamp_size // 2 + 1
-        padded_mbobs = jax_get_mb_obs(mcal_res[shear], pad_width=pad_width)
-
-        padded_xs = x_coords + pad_width
-        padded_ys = y_coords + pad_width
-
-        # Use batched function to extract all sub-observations at once
-        _, padded_xs_out, padded_ys_out, all_subobs = (
-            jax_batch_generate_mbobs_for_detections(
-                padded_mbobs,
-                xs=padded_xs,
-                ys=padded_ys,
-                box_size=moment_stamp_size,
-            )
-        )
-
-        # Process all detections in batch
-        obj_ids = jnp.arange(1, max_objects + 1, dtype=jnp.int64)
-
-        def process_detection(
-            subobs, obj_id, obj_x, obj_y, bmask_flag, mfrac_val, det_flag_val
-        ):
-            return jax_fit_single_detection(
-                mbobs=subobs[0][0],
-                psf_res=psf_res,
-                obj_id=obj_id,
-                obj_x=obj_x,
-                obj_y=obj_y,
-                shear_idx=shear_idx,
-                bmask_flag=bmask_flag,
-                mfrac_val=mfrac_val,
-                det_flag=det_flag_val,
-            )
-
-        # Vectorize
-        batch_results = jax.vmap(process_detection)(
-            all_subobs,
-            obj_ids,
-            padded_xs_out - pad_width,
-            padded_ys_out - pad_width,
-            bmask_flags,
-            mfrac_vals,
+        # Use jitted function for all post-detection processing
+        # This includes: mfrac computation, sub-obs extraction, and moment measurements
+        batch_results = _process_detections_for_shear(
+            mcal_res[shear],
+            x_coords,
+            y_coords,
             det_flag,
+            bmask_flags,
+            psf_res,
+            max_objects,
+            moment_stamp_size,
+            image_fft_size,
+            shear_idx,
         )
 
         all_detection_results.append(batch_results)
@@ -920,81 +948,20 @@ def jax_multi_band_deep_field_metadetect_jitted(
 
         # Process measurements for each band in detband_indices for every detection
         for band_idx in detband_indices:
-
-            def get_mfrac_values():
-                """Compute interpolated mfrac values."""
-                _interp_mfrac = jax_compute_mfrac_interp_image(
-                    mcal_res_dict[band_idx][shear].mfrac,
-                    mcal_res_dict[band_idx][shear].wcs.local(),
-                    image_fft_size=image_fft_size,
-                )
-
-                mfrac_vals = jax.vmap(lambda x, y: _interp_mfrac.xValue(x, y))(
-                    x_coords, y_coords
-                )
-                # For fill values (-1, -1), the interpolation will not make sense
-                mfrac_vals = jnp.where(det_flag == 1, mfrac_vals, 0.0)
-                return mfrac_vals
-
-            def get_zero_mfrac():
-                """Return zeros when no mfrac data."""
-                return jnp.zeros(max_objects, dtype=jnp.float64)
-
-            mfrac_vals = jax.lax.cond(
-                jnp.any(mcal_res_dict[band_idx][shear].mfrac > 0),
-                get_mfrac_values,
-                get_zero_mfrac,
-            )
-
-            # Pad observations once before extracting sub-observations
-            pad_width = moment_stamp_size // 2 + 1
-            padded_mbobs_single = jax_get_mb_obs(
-                mcal_res_dict[band_idx][shear], pad_width=pad_width
-            )
-
-            padded_xs = x_coords + pad_width
-            padded_ys = y_coords + pad_width
-
-            # extract subobs
-            _, padded_xs_out, padded_ys_out, all_subobs = (
-                jax_batch_generate_mbobs_for_detections(
-                    padded_mbobs_single,
-                    xs=padded_xs,
-                    ys=padded_ys,
-                    box_size=moment_stamp_size,
-                )
-            )
-
-            # Process all detections in batch
-            obj_ids = jnp.arange(1, max_objects + 1, dtype=jnp.int64)
-
-            def process_detection(
-                subobs, obj_id, obj_x, obj_y, bmask_flag, mfrac_val, det_flag_val
-            ):
-                return jax_fit_single_detection(
-                    mbobs=subobs[0][0],
-                    psf_res=psf_res_dict[band_idx],
-                    obj_id=obj_id,
-                    obj_x=obj_x,
-                    obj_y=obj_y,
-                    shear_idx=shear_idx,
-                    bmask_flag=bmask_flag,
-                    mfrac_val=mfrac_val,
-                    det_flag=det_flag_val,
-                )
-
-            # Vectorize over detections
-            batch_results = jax.vmap(process_detection)(
-                all_subobs,
-                obj_ids,
-                padded_xs_out - pad_width,
-                padded_ys_out - pad_width,
-                bmask_flags,
-                mfrac_vals,
+            # mfrac computation, sub-obs extraction, and moment measurements
+            batch_results = _process_detections_for_shear(
+                mcal_res_dict[band_idx][shear],
+                x_coords,
+                y_coords,
                 det_flag,
+                bmask_flags,
+                psf_res_dict[band_idx],
+                max_objects,
+                moment_stamp_size,
+                image_fft_size,
+                shear_idx,
+                band_idx=band_idx,
             )
-
-            batch_results["band_idx"] = jnp.full(max_objects, band_idx, dtype=jnp.int32)
             all_detection_results.append(batch_results)
 
     # Concatenate all batched results at once
