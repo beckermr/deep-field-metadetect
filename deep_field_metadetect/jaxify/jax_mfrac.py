@@ -26,10 +26,10 @@ def jax_compute_mfrac_interp_image(mfrac, wcs, fwhm=1.2, image_fft_size=256):
     """
     _gsimage_orig = jax_galsim.ImageD(mfrac, wcs=wcs)
     # NOTE: Set calculate_stepk and calculate_maxk to False
-    # The computation of stepk assumes a centrally concentrated 
-    # profile, which is not true for a mask fraction image. 
+    # The computation of stepk assumes a centrally concentrated
+    # profile, which is not true for a mask fraction image.
     # The JAX-GalSim defaults when not computing them are fine.
-    # Further, setting them true can lead to zero-flux errors 
+    # Further, setting them true can lead to zero-flux errors
     # during trace-time.
     _gsimage_interp = jax_galsim.InterpolatedImage(
         _gsimage_orig,
