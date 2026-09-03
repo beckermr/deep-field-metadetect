@@ -455,7 +455,7 @@ def watershed_from_peaks(
         i, peak = i_peak
         return place_marker(markers_current, i, peak), None
 
-    num_peaks = peaks.shape[-2]  # shape: ([n_fields], num_peaks, coordinates)
+    num_peaks = peaks.shape[-2]  # shape: ([n_fields], num_peaks, 2(coordinates))
     markers, _ = jax.lax.scan(scan_fn, markers, (jnp.arange(num_peaks), peaks))
 
     # Apply watershed algorithm
