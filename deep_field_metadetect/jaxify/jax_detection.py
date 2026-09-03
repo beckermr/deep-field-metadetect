@@ -126,7 +126,7 @@ def refine_centroid(
         0 if refinement was skipped (near border or large shift)
     """
     half_window = window_size // 2
-    height, width = image.shape
+    height, width = image.shape[-2:]  # ([n_fields] , height, width)
 
     # If near border, return original coordinates
     near_border = (
@@ -298,7 +298,7 @@ def watershed_segmentation(
         mask = jnp.zeros_like(inverted_image, dtype=bool)
 
     labels = markers.copy()
-    height, width = inverted_image.shape
+    height, width = inverted_image.shape[-2:]  # shape: ([n_fields], height, width)
 
     def watershed_step(labels_prev):
         """Single iteration of watershed flooding"""
@@ -433,7 +433,7 @@ def watershed_from_peaks(
     watershed_labels : jnp.ndarray
         2D segmentation map from watershed algorithm
     """
-    height, width = image.shape
+    height, width = image.shape[-2:]  # shape: ([n_fields], height, width)
 
     inverted_image = -image  # Invert so peaks become valleys
 
@@ -455,7 +455,8 @@ def watershed_from_peaks(
         i, peak = i_peak
         return place_marker(markers_current, i, peak), None
 
-    markers, _ = jax.lax.scan(scan_fn, markers, (jnp.arange(peaks.shape[0]), peaks))
+    num_peaks = peaks.shape[-2]  # shape: ([n_fields], num_peaks, 2(coordinates))
+    markers, _ = jax.lax.scan(scan_fn, markers, (jnp.arange(num_peaks), peaks))
 
     # Apply watershed algorithm
     watershed_labels = watershed_segmentation(
@@ -618,7 +619,7 @@ def jax_batch_generate_mbobs_for_detections(
 
         return DFMdetMultiBandObsList(sub_obs_lists)
 
-    num_objects = xs.shape[0]
+    num_objects = xs.shape[-1]  # shape: ([n_fields], num_objects)
     if ids is None:
         ids = jnp.arange(num_objects)
 

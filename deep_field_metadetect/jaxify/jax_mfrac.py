@@ -25,9 +25,17 @@ def jax_compute_mfrac_interp_image(mfrac, wcs, fwhm=1.2, image_fft_size=256):
         The interpolated masked fraction map.
     """
     _gsimage_orig = jax_galsim.ImageD(mfrac, wcs=wcs)
+    # NOTE: Set calculate_stepk and calculate_maxk to False
+    # The computation of stepk assumes a centrally concentrated
+    # profile, which is not true for a mask fraction image.
+    # The JAX-GalSim defaults when not computing them are fine.
+    # Further, setting them true can lead to zero-flux errors
+    # during trace-time.
     _gsimage_interp = jax_galsim.InterpolatedImage(
         _gsimage_orig,
         normalization="sb",
+        calculate_stepk=False,  # Skip zero-flux check - mfrac can be validly zero
+        calculate_maxk=False,
     )
     _gsimage = jax_galsim.Convolve(_gsimage_interp, jax_galsim.Gaussian(fwhm=fwhm))
     _gsimage = _gsimage.withGSParams(
@@ -45,6 +53,8 @@ def jax_compute_mfrac_interp_image(mfrac, wcs, fwhm=1.2, image_fft_size=256):
         normalization="sb",
         offset=(_gsimage_interp.image.xmin, _gsimage_interp.image.ymin),
         use_true_center=False,
+        calculate_stepk=False,
+        calculate_maxk=False,
     )
 
     return _gsimage_final

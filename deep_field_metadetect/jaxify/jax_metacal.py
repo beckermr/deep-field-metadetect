@@ -92,7 +92,7 @@ def jax_get_gauss_reconv_psf_galsim(
 
     karr_r = kim.real.array
     # Find the smallest r where the kval < small_kval
-    nk = karr_r.shape[0]
+    nk = karr_r.shape[-1]
     kx, ky = jnp.meshgrid(jnp.arange(-nk / 2, nk / 2), jnp.arange(-nk / 2, nk / 2))
     ksq = (kx**2 + ky**2) * dk**2
     ksq_max = jnp.min(jnp.where(karr_r < small_kval * psf.flux, ksq, jnp.inf))

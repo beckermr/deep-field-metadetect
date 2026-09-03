@@ -31,8 +31,8 @@ class DFMdetPSF:
                 dvdx=0.0,
                 dvdy=1.0,
                 origin=jax_galsim.PositionD(
-                    y=(image.shape[0] + 1) / 2,
-                    x=(image.shape[1] + 1) / 2,
+                    y=(image.shape[-2] + 1) / 2,
+                    x=(image.shape[-1] + 1) / 2,
                 ),
             )
 
@@ -129,8 +129,8 @@ class DFMdetObservation:
                 dvdx=0.0,
                 dvdy=1.0,
                 origin=jax_galsim.PositionD(
-                    y=(image.shape[0] + 1) / 2,
-                    x=(image.shape[1] + 1) / 2,
+                    y=(image.shape[-2] + 1) / 2,
+                    x=(image.shape[-1] + 1) / 2,
                 ),
             )
         self.image = image
