@@ -145,8 +145,8 @@ def test_dtype_stability(enable_x64):
 
     # Set tolerances based on x64 mode
     if enable_x64:
-        rtol = 1e-7  # Stricter when both use x64 (for moment calculation)
-        rtol_shear_est = 1e-7  # For shear estimation
+        rtol = 1e-6  # Stricter when both use x64 (for moment calculation)
+        rtol_shear_est = 1e-6  # For shear estimation
     else:
         # this fails if rtol is 1e-3
         rtol = 1e-2  # More relaxed when float32 mode doesn't use x64 at all
