@@ -23,7 +23,7 @@ from deep_field_metadetect.metacal import (
 from deep_field_metadetect.utils import make_simple_sim
 
 # Activate full precision for these tests
-precision_config.activate_full_precision()
+precision_config.use_mixed_precision(enabled=False)
 
 
 def _create_simple_obs_pair():
@@ -212,4 +212,4 @@ def test_metacal_shears_intermediate_values():
         )
 
 
-precision_config.deactivate_full_precision()
+precision_config.use_mixed_precision(enabled=True)
