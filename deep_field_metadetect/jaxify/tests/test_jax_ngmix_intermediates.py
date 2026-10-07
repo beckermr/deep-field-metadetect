@@ -1,6 +1,5 @@
 import numpy as np
 
-from deep_field_metadetect.jaxify import precision_config
 from deep_field_metadetect.jaxify.jax_metacal import (
     get_jax_galsim_object_from_dfmd_obs_nopix,
     jax_get_gauss_reconv_psf_galsim,
@@ -21,9 +20,6 @@ from deep_field_metadetect.metacal import (
     metacal_op_shears,
 )
 from deep_field_metadetect.utils import make_simple_sim
-
-# Activate full precision for these tests
-precision_config.use_mixed_precision(enabled=False)
 
 
 def _create_simple_obs_pair():
@@ -210,6 +206,3 @@ def test_metacal_shears_intermediate_values():
         assert np.allclose(
             obs_ngmix.weight, obs_jax_ngmix.weight, rtol=1e-10, atol=1e-12
         )
-
-
-precision_config.use_mixed_precision(enabled=True)

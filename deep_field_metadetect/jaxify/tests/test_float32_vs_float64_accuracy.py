@@ -127,6 +127,7 @@ def test_dtype_stability(enable_x64):
     3. Shear response (R11, R22)
     4. Shear estimation (g1_est, g2_est)
     """
+    original_mode = precision_config._CURRENT_MODE
 
     # Run metadetect with both precisions (only once!)
     res_f64 = run_mdet_with_precision(use_float32=False, enable_x64=True)
@@ -226,6 +227,9 @@ def test_dtype_stability(enable_x64):
         f"  Rel diff: {g2_est_diff / calib_f64['g2_est'] * 100:.6f}%\n"
         f"  Expected rtol: {rtol_shear_est}"
     )
+
+    # Restore original precision mode
+    precision_config.use_mixed_precision(enabled=(original_mode == "mixed"))
 
 
 def main():
