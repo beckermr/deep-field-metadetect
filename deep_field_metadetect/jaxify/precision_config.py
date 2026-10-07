@@ -1,18 +1,19 @@
 """Precision configuration for mixed precision support."""
 
+import jax
 import jax.numpy as jnp
 
 # Module-level dtype variables
-# Default: FULL PRECISION (float64 everywhere for accuracy)
-IMAGE_DTYPE = jnp.float64
-WEIGHT_DTYPE = jnp.float64
-NOISE_DTYPE = jnp.float64
-PSF_DTYPE = jnp.float64
+# Default: MIXED PRECISION (float32 for images, float64 for moments)
+IMAGE_DTYPE = jnp.float32
+WEIGHT_DTYPE = jnp.float32
+NOISE_DTYPE = jnp.float32
+PSF_DTYPE = jnp.float32
 BMASK_DTYPE = jnp.int32
-MFRAC_DTYPE = jnp.float64
+MFRAC_DTYPE = jnp.float32
 MOMENT_DTYPE = jnp.float64
 COORD_DTYPE = jnp.float64  # Not yet used, kept for RA and DEC later
-_CURRENT_MODE = "full"
+_CURRENT_MODE = "mixed"
 
 
 def use_mixed_precision(enabled: bool = True):
@@ -21,8 +22,8 @@ def use_mixed_precision(enabled: bool = True):
     Parameters
     ----------
     enabled : bool
-        If True, use float32 for images and float64 for moments.
-        If False, use float64 everywhere (DEFAULT).
+        If True, use float32 for images and float64 for moments (DEFAULT).
+        If False, use float64 everywhere.
     """
     global IMAGE_DTYPE, WEIGHT_DTYPE, NOISE_DTYPE, PSF_DTYPE
     global MFRAC_DTYPE, MOMENT_DTYPE, COORD_DTYPE, _CURRENT_MODE
@@ -48,8 +49,6 @@ def use_mixed_precision(enabled: bool = True):
         _CURRENT_MODE = "full"
 
     # Clear JAX compilation cache to force recompilation with new dtypes
-    import jax
-
     jax.clear_caches()
 
 
