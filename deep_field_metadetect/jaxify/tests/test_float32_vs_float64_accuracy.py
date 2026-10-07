@@ -128,8 +128,9 @@ def test_dtype_stability(enable_x64):
     4. Shear estimation (g1_est, g2_est)
     """
     original_mode = precision_config._CURRENT_MODE
+    original_x64 = jax.config.jax_enable_x64
 
-    # Run metadetect with both precisions (only once!)
+    # Run metadetect with both precisions
     res_f64 = run_mdet_with_precision(use_float32=False, enable_x64=True)
     res_f32 = run_mdet_with_precision(use_float32=True, enable_x64=enable_x64)
 
@@ -228,8 +229,9 @@ def test_dtype_stability(enable_x64):
         f"  Expected rtol: {rtol_shear_est}"
     )
 
-    # Restore original precision mode
+    # Restore original precision mode and x64 setting
     precision_config.use_mixed_precision(enabled=(original_mode == "mixed"))
+    jax.config.update("jax_enable_x64", original_x64)
 
 
 def main():
