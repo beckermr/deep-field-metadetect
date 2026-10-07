@@ -23,6 +23,8 @@ from deep_field_metadetect.utils import (
     print_m_c,
 )
 
+jax.config.update("jax_enable_x64", True)
+
 
 @partial(
     jax.jit,

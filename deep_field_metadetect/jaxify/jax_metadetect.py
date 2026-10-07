@@ -8,7 +8,7 @@ import numpy as np
 from deep_field_metadetect.detect import (
     run_detection_sep,
 )
-from deep_field_metadetect.jaxify import jax_dfmd_defaults
+from deep_field_metadetect.jaxify import jax_dfmd_defaults, precision_config
 from deep_field_metadetect.jaxify.jax_detection import (
     detect_galaxies,
     jax_batch_generate_mbobs_for_detections,
@@ -163,12 +163,16 @@ def _process_detections_for_shear(
             x_coords, y_coords
         )
         # For fill values (-1, -1), the interpolation will not make sense
-        mfrac_vals = jnp.where(det_flag == 1, mfrac_vals, 0.0)
-        return mfrac_vals
+        mfrac_vals = jnp.where(
+            det_flag == 1,
+            mfrac_vals,
+            jnp.array(0.0, dtype=precision_config.MFRAC_DTYPE),
+        )
+        return mfrac_vals.astype(precision_config.MFRAC_DTYPE)
 
     def get_zero_mfrac():
         """Return zeros when no mfrac data."""
-        return jnp.zeros(max_objects, dtype=jnp.float64)
+        return jnp.zeros(max_objects, dtype=precision_config.MFRAC_DTYPE)
 
     mfrac_vals = jax.lax.cond(
         jnp.any(mcal_obs.mfrac > 0), get_mfrac_values, get_zero_mfrac

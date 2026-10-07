@@ -8,6 +8,7 @@ import numpy as np
 from ngmix.observation import Observation
 
 from deep_field_metadetect.detect import DEFAULT_IMAGE_VALUES
+from deep_field_metadetect.jaxify import precision_config
 
 
 @jax.tree_util.register_pytree_node_class
@@ -21,8 +22,18 @@ class DFMdetPSF:
         store_pixels=True,
         ignore_zero_weight=True,
     ):
+        # Enforce precision config dtypes
+        self.image = jnp.asarray(image, dtype=precision_config.PSF_DTYPE)
+
+        if weight is None:
+            weight = jnp.ones(self.image.shape, dtype=precision_config.WEIGHT_DTYPE)
+        else:
+            weight = jnp.asarray(weight, dtype=precision_config.WEIGHT_DTYPE)
+        self.weight = weight
+
         if meta is None:
             meta = {}
+        self.meta = meta
 
         if wcs is None:
             wcs = jax_galsim.wcs.AffineTransform(
@@ -31,17 +42,12 @@ class DFMdetPSF:
                 dvdx=0.0,
                 dvdy=1.0,
                 origin=jax_galsim.PositionD(
-                    y=(image.shape[-2] + 1) / 2,
-                    x=(image.shape[-1] + 1) / 2,
+                    y=(self.image.shape[-2] + 1) / 2,
+                    x=(self.image.shape[-1] + 1) / 2,
                 ),
             )
-
-        self.image = image
-        if weight is None:
-            weight = jnp.ones_like(self.image, dtype=jnp.float32)
-        self.weight = weight
         self.wcs = wcs
-        self.meta = meta
+
         self.store_pixels = store_pixels
         self.ignore_zero_weight = ignore_zero_weight
 
@@ -106,21 +112,48 @@ class DFMdetObservation:
         store_pixels=True,
         ignore_zero_weight=True,
     ):
+        # Enforce precision config dtypes for all arrays
+        self.image = jnp.asarray(image, dtype=precision_config.IMAGE_DTYPE)
+
         if weight is None:
-            weight = jnp.ones_like(image)
+            weight = jnp.ones(self.image.shape, dtype=precision_config.WEIGHT_DTYPE)
+        else:
+            weight = jnp.asarray(weight, dtype=precision_config.WEIGHT_DTYPE)
+        self.weight = weight
+
         if bmask is None:
-            bmask = jnp.zeros_like(image, dtype=jnp.int32)
+            bmask = jnp.zeros(self.image.shape, dtype=precision_config.BMASK_DTYPE)
+        else:
+            bmask = jnp.asarray(bmask, dtype=precision_config.BMASK_DTYPE)
+        self.bmask = bmask
+
         if ormask is None:
-            ormask = jnp.zeros_like(image, dtype=jnp.int32)
+            ormask = jnp.zeros(self.image.shape, dtype=jnp.int32)
+        else:
+            ormask = jnp.asarray(ormask, dtype=jnp.int32)
+        self.ormask = ormask
+
         if noise is None:
-            noise = jnp.zeros_like(image)
+            noise = jnp.zeros(self.image.shape, dtype=precision_config.NOISE_DTYPE)
+        else:
+            noise = jnp.asarray(noise, dtype=precision_config.NOISE_DTYPE)
+        self.noise = noise
+
         if mfrac is None:
-            mfrac = jnp.zeros_like(image)
+            mfrac = jnp.zeros(self.image.shape, dtype=precision_config.MFRAC_DTYPE)
+        else:
+            mfrac = jnp.asarray(mfrac, dtype=precision_config.MFRAC_DTYPE)
+        self.mfrac = mfrac
+
         if meta is None:
             meta = {}
+        self.meta = meta
 
         if psf is None:
-            psf = DFMdetPSF(image=jnp.zeros_like(image, dtype=jnp.float32))
+            psf = DFMdetPSF(
+                image=jnp.zeros(self.image.shape, dtype=precision_config.PSF_DTYPE)
+            )
+        self.psf = psf
 
         if wcs is None:
             wcs = jax_galsim.wcs.AffineTransform(
@@ -129,19 +162,12 @@ class DFMdetObservation:
                 dvdx=0.0,
                 dvdy=1.0,
                 origin=jax_galsim.PositionD(
-                    y=(image.shape[-2] + 1) / 2,
-                    x=(image.shape[-1] + 1) / 2,
+                    y=(self.image.shape[-2] + 1) / 2,
+                    x=(self.image.shape[-1] + 1) / 2,
                 ),
             )
-        self.image = image
-        self.weight = weight
-        self.bmask = bmask
-        self.ormask = ormask
-        self.noise = noise
         self.wcs = wcs
-        self.psf = psf
-        self.mfrac = mfrac
-        self.meta = meta
+
         self.store_pixels = store_pixels
         self.ignore_zero_weight = ignore_zero_weight
 
@@ -218,6 +244,8 @@ def ngmix_obs_to_dfmd_obs(obs: ngmix.observation.Observation) -> DFMdetObservati
     Note that unlike the non-jax version, PSF is no longer an instance of
     observation and default values of bmask, ormask, mfrac are arrays of zeros.
 
+    Arrays are converted to dtypes specified by precision_config for consistency.
+
     Parameters
     ----------
     obs: ngmix.observation.Observation
@@ -226,7 +254,7 @@ def ngmix_obs_to_dfmd_obs(obs: ngmix.observation.Observation) -> DFMdetObservati
     Returns
     -------
     DFMdetObservation
-        The converted DFMdetObservation with JAX arrays.
+        The converted DFMdetObservation with JAX arrays at configured precision.
     """
     jacobian = obs.get_jacobian()
 
@@ -235,7 +263,7 @@ def ngmix_obs_to_dfmd_obs(obs: ngmix.observation.Observation) -> DFMdetObservati
         psf_obs = obs.get_psf()
         psf_jacobian = psf_obs.get_jacobian()
         psf = DFMdetPSF(
-            image=psf_obs.image.astype(float),
+            image=jnp.array(psf_obs.image, dtype=precision_config.PSF_DTYPE),
             wcs=jax_galsim.wcs.AffineTransform(
                 dudx=psf_jacobian.dudcol,
                 dudy=psf_jacobian.dudrow,
@@ -252,11 +280,17 @@ def ngmix_obs_to_dfmd_obs(obs: ngmix.observation.Observation) -> DFMdetObservati
         )
 
     return DFMdetObservation(
-        image=obs.image,
-        weight=obs.weight,
-        bmask=obs.bmask if obs.has_bmask() else None,
-        ormask=obs.ormask if obs.has_ormask() else None,
-        noise=obs.noise if obs.has_noise() else None,
+        image=jnp.array(obs.image, dtype=precision_config.IMAGE_DTYPE),
+        weight=jnp.array(obs.weight, dtype=precision_config.WEIGHT_DTYPE),
+        bmask=jnp.array(obs.bmask, dtype=precision_config.BMASK_DTYPE)
+        if obs.has_bmask()
+        else None,
+        ormask=jnp.array(obs.ormask, dtype=precision_config.BMASK_DTYPE)
+        if obs.has_ormask()
+        else None,
+        noise=jnp.array(obs.noise, dtype=precision_config.NOISE_DTYPE)
+        if obs.has_noise()
+        else None,
         wcs=jax_galsim.wcs.AffineTransform(
             dudx=jacobian.dudcol,
             dudy=jacobian.dudrow,
@@ -269,7 +303,9 @@ def ngmix_obs_to_dfmd_obs(obs: ngmix.observation.Observation) -> DFMdetObservati
         ),
         psf=psf,
         meta=obs.meta,
-        mfrac=obs.mfrac if obs.has_mfrac() else None,
+        mfrac=jnp.array(obs.mfrac, dtype=precision_config.MFRAC_DTYPE)
+        if obs.has_mfrac()
+        else None,
         store_pixels=getattr(obs, "store_pixels", True),
         ignore_zero_weight=getattr(obs, "ignore_zero_weight", True),
     )

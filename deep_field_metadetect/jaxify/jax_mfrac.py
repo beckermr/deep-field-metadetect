@@ -3,6 +3,8 @@ from functools import partial
 import jax
 import jax_galsim
 
+from deep_field_metadetect.jaxify import precision_config
+
 
 @partial(jax.jit, static_argnames=["image_fft_size"])
 def jax_compute_mfrac_interp_image(mfrac, wcs, fwhm=1.2, image_fft_size=256):
@@ -24,7 +26,7 @@ def jax_compute_mfrac_interp_image(mfrac, wcs, fwhm=1.2, image_fft_size=256):
     interp_image : jax_galsim.InterpolatedImage
         The interpolated masked fraction map.
     """
-    _gsimage_orig = jax_galsim.ImageD(mfrac, wcs=wcs)
+    _gsimage_orig = jax_galsim.Image(mfrac, wcs=wcs, dtype=precision_config.MFRAC_DTYPE)
     # NOTE: Set calculate_stepk and calculate_maxk to False
     # The computation of stepk assumes a centrally concentrated
     # profile, which is not true for a mask fraction image.
@@ -45,6 +47,7 @@ def jax_compute_mfrac_interp_image(mfrac, wcs, fwhm=1.2, image_fft_size=256):
     _gsimage = _gsimage.drawImage(
         image=_gsimage_orig.copy(),
         method="sb",
+        dtype=precision_config.MFRAC_DTYPE,
     )
     _gsimage.wcs = None
     _gsimage.scale = 1.0

@@ -4,6 +4,7 @@ import jax
 import jax.numpy as jnp
 import ngmix
 
+from deep_field_metadetect.jaxify import precision_config
 from deep_field_metadetect.jaxify.observation import DFMdetObservation
 
 
@@ -140,8 +141,8 @@ class GaussMomData(NamedTuple):
 
 def nigmix_obs_to_gaussmom_obs(obs: ngmix.Observation) -> GaussMomObs:
     x, y = jnp.meshgrid(
-        jnp.arange(obs.image.shape[1], dtype=float),
-        jnp.arange(obs.image.shape[0], dtype=float),
+        jnp.arange(obs.image.shape[1], dtype=precision_config.MOMENT_DTYPE),
+        jnp.arange(obs.image.shape[0], dtype=precision_config.MOMENT_DTYPE),
     )
     dx = x - obs.jacobian.col0
     dy = y - obs.jacobian.row0
@@ -151,17 +152,17 @@ def nigmix_obs_to_gaussmom_obs(obs: ngmix.Observation) -> GaussMomObs:
     return GaussMomObs(
         u,
         v,
-        obs.image,
+        jnp.asarray(obs.image, dtype=precision_config.MOMENT_DTYPE),
         obs.jacobian.dudcol * obs.jacobian.dvdrow
         - obs.jacobian.dudrow * obs.jacobian.dvdcol,
-        obs.weight,
+        jnp.asarray(obs.weight, dtype=precision_config.MOMENT_DTYPE),
     )
 
 
 def dfmd_obs_to_gaussmom_obs(obs: DFMdetObservation) -> GaussMomObs:
     x, y = jnp.meshgrid(
-        jnp.arange(obs.image.shape[1], dtype=float),
-        jnp.arange(obs.image.shape[0], dtype=float),
+        jnp.arange(obs.image.shape[1], dtype=precision_config.MOMENT_DTYPE),
+        jnp.arange(obs.image.shape[0], dtype=precision_config.MOMENT_DTYPE),
     )
     dx = x - (obs.wcs.origin.x - 1)
     dy = y - (obs.wcs.origin.y - 1)
@@ -171,7 +172,7 @@ def dfmd_obs_to_gaussmom_obs(obs: DFMdetObservation) -> GaussMomObs:
     return GaussMomObs(
         u,
         v,
-        obs.image,
+        jnp.asarray(obs.image, dtype=precision_config.MOMENT_DTYPE),
         jnp.abs(obs.wcs.dudx * obs.wcs.dvdy - obs.wcs.dudy * obs.wcs.dvdx),
-        obs.weight,
+        jnp.asarray(obs.weight, dtype=precision_config.MOMENT_DTYPE),
     )

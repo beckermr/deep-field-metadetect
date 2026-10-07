@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import jax_galsim
 
-from deep_field_metadetect.jaxify import jax_dfmd_defaults
+from deep_field_metadetect.jaxify import jax_dfmd_defaults, precision_config
 from deep_field_metadetect.jaxify.observation import (
     DFMdetMultiBandObsList,
     DFMdetObservation,
@@ -66,13 +66,20 @@ def _make_jax_galsim_single_sim_jitted(
         minimum_fft_size=psf_fft_size, maximum_fft_size=psf_fft_size
     )
 
-    # Draw object image
-    obj_image = obj_fixed.drawImage(nx=dim, ny=dim, scale=scale, method="auto").array
+    # Draw object image with controlled precision (read module-level dtype)
+    obj_image = obj_fixed.drawImage(
+        nx=dim, ny=dim, scale=scale, method="auto", dtype=precision_config.IMAGE_DTYPE
+    ).array
+
     noise = jax.random.normal(key, shape=(dim, dim)) * nse
+    noise = noise.astype(precision_config.NOISE_DTYPE)
 
     image = obj_image + noise
-    weight = jnp.ones((dim, dim), dtype=jnp.float_) / nse**2
-    psf_image = psf_fixed.drawImage(nx=dim_psf, ny=dim_psf, scale=scale).array
+    weight = jnp.ones((dim, dim), dtype=precision_config.WEIGHT_DTYPE) / nse**2
+
+    psf_image = psf_fixed.drawImage(
+        nx=dim_psf, ny=dim_psf, scale=scale, dtype=precision_config.PSF_DTYPE
+    ).array
     wcs = jax_galsim.wcs.AffineTransform(
         dudx=scale,
         dudy=0.0,
@@ -94,17 +101,17 @@ def _make_jax_galsim_single_sim_jitted(
         ),
     )
 
-    # Create observation
+    # Create observation (read module-level dtypes)
     obs = DFMdetObservation(
         image=image,
         weight=weight,
         noise=noise,
-        bmask=jnp.zeros((dim, dim), dtype=jnp.int32),
-        mfrac=jnp.zeros((dim, dim), dtype=jnp.float64),
+        bmask=jnp.zeros((dim, dim), dtype=precision_config.BMASK_DTYPE),
+        mfrac=jnp.zeros((dim, dim), dtype=precision_config.MFRAC_DTYPE),
         wcs=wcs,
         psf=DFMdetPSF(
             image=psf_image,
-            weight=jnp.ones_like(psf_image),
+            weight=jnp.ones((dim_psf, dim_psf), dtype=precision_config.WEIGHT_DTYPE),
             wcs=psf_wcs,
         ),
     )
@@ -230,7 +237,9 @@ def make_jax_galsim_simple_sim_jitted(
     gal_psf_conv = jax_galsim.Convolve([gal, psf]).withGSParams(
         minimum_fft_size=image_fft_size, maximum_fft_size=image_fft_size
     )
-    im = gal_psf_conv.drawImage(nx=dim, ny=dim, scale=scale).array
+    im = gal_psf_conv.drawImage(
+        nx=dim, ny=dim, scale=scale, dtype=precision_config.IMAGE_DTYPE
+    ).array
     nse = jnp.sqrt(jnp.sum(im**2)) / s2n
 
     # Apply flux factor
