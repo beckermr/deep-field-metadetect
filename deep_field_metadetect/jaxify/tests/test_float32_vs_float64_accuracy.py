@@ -232,32 +232,3 @@ def test_dtype_stability(enable_x64):
     # Restore original precision mode and x64 setting
     precision_config.use_mixed_precision(enabled=(original_mode == "mixed"))
     jax.config.update("jax_enable_x64", original_x64)
-
-
-def main():
-    """Run all accuracy tests and print results."""
-    print("=" * 80)
-    print("Float32 vs Float64 Accuracy Tests")
-    print("=" * 80)
-    print("\nComparing full float64 (enable_x64=True) against mixed precision float32")
-    print("with enable_x64 parameterized (True/False)\n")
-
-    # Test both x64 modes for float32
-    for enable_x64 in [True, False]:
-        print(f"\n{'=' * 80}")
-        print(f"Testing with float32 enable_x64={enable_x64}")
-        print(f"{'=' * 80}\n")
-
-        try:
-            test_dtype_stability(enable_x64)
-            print("  All differences are within tollerence \n")
-        except AssertionError:
-            print(" Differences are too large \n")
-
-    print("=" * 80)
-    print("All tests completed!")
-    print("=" * 80)
-
-
-if __name__ == "__main__":
-    main()
