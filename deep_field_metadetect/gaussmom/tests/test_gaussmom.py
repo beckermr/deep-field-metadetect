@@ -1,4 +1,5 @@
 import galsim
+import jax
 import jax.numpy as jnp
 import ngmix
 import numpy as np
@@ -16,6 +17,8 @@ from deep_field_metadetect.gaussmom.gaussmom import (
     _set_T_Terr_Tflags,
 )
 from deep_field_metadetect.gaussmom.gaussmom_core import nigmix_obs_to_gaussmom_obs
+
+jax.config.update("jax_enable_x64", True)
 
 
 @pytest.mark.parametrize("weight_fac", [1, 1e5])

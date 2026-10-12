@@ -5,6 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from deep_field_metadetect.jaxify import precision_config
 from deep_field_metadetect.jaxify.jax_dfmd_defaults import (
     DEFAULT_IMAGE_FFT_SIZE,
     DEFAULT_PSF_FFT_SIZE,
@@ -34,6 +35,8 @@ from deep_field_metadetect.utils import (
     measure_mcal_shear_quants,
     print_m_c,
 )
+
+jax.config.update("jax_enable_x64", True)
 
 
 def _run_single_sim_pair(seed, s2n):
@@ -628,11 +631,15 @@ def test_jax_add_dfmd_obs_vs_add_dfmd_obs_skip_mfrac():
     )
 
 
-def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix():
+def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix_float64():
     """
     Test if jax_metacal_wide_and_deep_psf_matched and metacal_wide_and_deep_psf_matched
     return the same results.
     """
+    # Force float64 mode for this test to match ngmix precision
+    original_mode = precision_config._CURRENT_MODE
+    precision_config.use_mixed_precision(False)
+
     nxy = 201
     nxy_psf = 53
     scale = 0.2
@@ -730,22 +737,33 @@ def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix():
 
         image_diff = np.abs(ngmix_obs.image - jax_obs.image)
         max_image_diff = np.max(image_diff)
-        print(f" Image - max diff: {max_image_diff:.2e}")
+        max_image = np.max(np.abs(ngmix_obs.image))
+        rel_image_diff = max_image_diff / max_image if max_image > 0 else 0
+        print(f"  Image max diff: {max_image_diff:.2e}, relative: {rel_image_diff:.2e}")
 
         psf_diff = np.abs(ngmix_obs.psf.image - jax_obs.psf.image)
         max_psf_diff = np.max(psf_diff)
-        print(f"  PSF - max diff: {max_psf_diff:.2e}")
+        max_psf = np.max(np.abs(ngmix_obs.psf.image))
+        rel_psf_diff = max_psf_diff / max_psf if max_psf > 0 else 0
+        print(f"  PSF max diff: {max_psf_diff:.2e}, relative: {rel_psf_diff:.2e}")
 
         weight_diff = np.abs(ngmix_obs.weight - jax_obs.weight)
         max_weight_diff = np.max(weight_diff)
-        print(f"  Weight - max diff: {max_weight_diff:.2e}")
+        max_weight = np.max(ngmix_obs.weight)
+        rel_weight_diff = max_weight_diff / max_weight if max_weight > 0 else 0
+        print(
+            f"  Weight max diff: {max_weight_diff:.2e}, relative: {rel_weight_diff:.2e}"
+        )
 
+        # NOTE: the comparison is not 100% accurate because some galsim sims are in
+        # float32 but here everything is forced in float64.
+        # i.e., JAX float64 version is more precise.
         assert np.allclose(ngmix_obs.image, jax_obs.image, rtol=1e-7, atol=1e-7), (
             f"Images differ significantly for {shear}: max_diff={max_image_diff:.2e}"
         )
 
         assert np.allclose(
-            ngmix_obs.psf.image, jax_obs.psf.image, rtol=1e-9, atol=1e-9
+            ngmix_obs.psf.image, jax_obs.psf.image, rtol=1e-8, atol=1e-8
         ), f"PSF images differ significantly for {shear}: max_diff={max_psf_diff:.2e}"
 
         assert np.array_equal(ngmix_obs.weight, jax_obs.weight), (
@@ -760,19 +778,198 @@ def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix():
 
         if ngmix_obs.has_noise() and jax_obs.has_noise():
             noise_diff = np.max(np.abs(ngmix_obs.noise - jax_obs.noise))
-            print(f"  Noise - max diff: {noise_diff:.2e}")
+            max_noise = np.max(np.abs(ngmix_obs.noise))
+            rel_noise_diff = noise_diff / max_noise if max_noise > 0 else 0
+            print(f"  Noise max diff: {noise_diff:.2e}, relative: {rel_noise_diff:.2e}")
             assert np.allclose(
                 ngmix_obs.noise, jax_obs.noise, rtol=1e-10, atol=1e-12
             ), f"Noise differs significantly for {shear}: max_diff={noise_diff:.2e}"
 
         if ngmix_obs.has_mfrac() and jax_obs.has_mfrac():
             mfrac_diff = np.max(np.abs(ngmix_obs.mfrac - jax_obs.mfrac))
-            print(f"  Mfrac - max diff: {mfrac_diff:.2e}")
+            max_mfrac = np.max(np.abs(ngmix_obs.mfrac))
+            rel_mfrac_diff = mfrac_diff / max_mfrac if max_mfrac > 0 else 0
+            print(f"  Mfrac max diff: {mfrac_diff:.2e}, relative: {rel_mfrac_diff:.2e}")
             assert np.allclose(
                 ngmix_obs.mfrac, jax_obs.mfrac, rtol=1e-10, atol=1e-12
             ), f"Mfrac differs significantly for {shear}: max_diff={mfrac_diff:.2e}"
 
     print(" All metacalibration results match between JAX and non-JAX implementations!")
+
+    # Restore original precision mode
+    precision_config.use_mixed_precision(original_mode == "mixed")
+
+
+def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix_float32():
+    """
+    Test if jax_metacal_wide_and_deep_psf_matched and metacal_wide_and_deep_psf_matched
+    produce numerically close results in mixed precision (float32) mode.
+    """
+    # Force mixed precision (float32) mode
+    original_mode = precision_config._CURRENT_MODE
+    precision_config.use_mixed_precision(True)
+
+    nxy = 201
+    nxy_psf = 53
+    scale = 0.2
+    seed = 1234
+
+    # Create test observations
+    obs_w_ngmix, obs_d_ngmix, obs_dn_ngmix = make_simple_sim(
+        seed=seed,
+        g1=0.02,
+        g2=0.0,
+        s2n=1e4,
+        deep_noise_fac=1.0 / np.sqrt(30),
+        deep_psf_fac=0.8,
+        dim=nxy,
+        dim_psf=nxy_psf,
+        scale=scale,
+        buff=25,
+        n_objs=2,
+        return_dfmd_obs=False,  # Get ngmix observations
+    )
+
+    # Convert to DFMdet observations for JAX
+    obs_w_jax = ngmix_obs_to_dfmd_obs(obs_w_ngmix)
+    obs_d_jax = ngmix_obs_to_dfmd_obs(obs_d_ngmix)
+    obs_dn_jax = ngmix_obs_to_dfmd_obs(obs_dn_ngmix)
+
+    # Test parameters
+    shears = ("noshear", "1p", "1m", "2p", "2m")
+    skip_obs_wide_corrections = False
+    skip_obs_deep_corrections = False
+
+    reconv_psf_dk = compute_dk(pixel_scale=0.2, image_size=nxy_psf)
+    reconv_psf_kim_size = compute_kim_size(image_size=nxy_psf)
+
+    # Run non-JAX metacalibration with k_info return for consistency
+    ngmix_result, kinfo = metacal_wide_and_deep_psf_matched(
+        obs_w_ngmix,
+        obs_d_ngmix,
+        obs_dn_ngmix,
+        shears=shears,
+        skip_obs_wide_corrections=skip_obs_wide_corrections,
+        skip_obs_deep_corrections=skip_obs_deep_corrections,
+        return_k_info=True,
+        psf_fft_size=DEFAULT_PSF_FFT_SIZE,
+        image_fft_size=DEFAULT_IMAGE_FFT_SIZE,
+        reconv_psf_dk=reconv_psf_dk,
+        reconv_psf_kim_size=reconv_psf_kim_size,
+    )
+    force_stepk_field, force_maxk_field, force_stepk_psf, force_maxk_psf = kinfo
+
+    print("Running JAX metacalibration in float32 mode...")
+    # Run JAX metacalibration with the same k_info for exact consistency
+    jax_result, jax_k_info = jax_metacal_wide_and_deep_psf_matched(
+        obs_w_jax,
+        obs_d_jax,
+        obs_dn_jax,
+        nxy=nxy,
+        nxy_psf=nxy_psf,
+        shears=shears,
+        skip_obs_wide_corrections=skip_obs_wide_corrections,
+        skip_obs_deep_corrections=skip_obs_deep_corrections,
+        return_k_info=True,
+        force_stepk_field=force_stepk_field,
+        force_maxk_field=force_maxk_field,
+        force_stepk_psf=force_stepk_psf,
+        force_maxk_psf=force_maxk_psf,
+        psf_fft_size=DEFAULT_PSF_FFT_SIZE,
+        image_fft_size=DEFAULT_IMAGE_FFT_SIZE,
+        reconv_psf_dk=reconv_psf_dk,
+        reconv_psf_kim_size=reconv_psf_kim_size,
+    )
+
+    # Extract and verify k_info consistency
+    assert np.allclose(jax_k_info[0], force_stepk_field), "stepk_field mismatch"
+    assert np.allclose(jax_k_info[1], force_maxk_field), "maxk_field mismatch"
+    assert np.allclose(jax_k_info[2], force_stepk_psf), "stepk_psf mismatch"
+    assert np.allclose(jax_k_info[3], force_maxk_psf), "maxk_psf mismatch"
+
+    print("Comparing results (allowing for float32 precision loss)...")
+
+    # Compare results for each shear
+    for shear in shears:
+        print(f"Comparing shear: {shear}")
+
+        ngmix_obs = ngmix_result[shear]
+        jax_obs = jax_result[shear]
+
+        # Check that both observations have the same basic properties
+        assert ngmix_obs.image.shape == jax_obs.image.shape, (
+            f"Image shapes differ for {shear}"
+        )
+        assert ngmix_obs.psf.image.shape == jax_obs.psf.image.shape, (
+            f"PSF shapes differ for {shear}"
+        )
+
+        image_diff = np.abs(ngmix_obs.image - jax_obs.image)
+        max_image_diff = np.max(image_diff)
+        max_image = np.max(np.abs(ngmix_obs.image))
+        rel_image_diff = max_image_diff / max_image if max_image > 0 else 0
+        print(f"  Image max diff: {max_image_diff:.2e}, relative: {rel_image_diff:.2e}")
+
+        psf_diff = np.abs(ngmix_obs.psf.image - jax_obs.psf.image)
+        max_psf_diff = np.max(psf_diff)
+        max_psf = np.max(np.abs(ngmix_obs.psf.image))
+        rel_psf_diff = max_psf_diff / max_psf if max_psf > 0 else 0
+        print(f"  PSF max diff: {max_psf_diff:.2e}, relative: {rel_psf_diff:.2e}")
+
+        weight_diff = np.abs(ngmix_obs.weight - jax_obs.weight)
+        max_weight_diff = np.max(weight_diff)
+        max_weight = np.max(ngmix_obs.weight)
+        rel_weight_diff = max_weight_diff / max_weight if max_weight > 0 else 0
+        print(
+            f"  Weight max diff: {max_weight_diff:.2e}, relative: {rel_weight_diff:.2e}"
+        )
+
+        assert np.allclose(ngmix_obs.image, jax_obs.image, rtol=1e-6, atol=1e-6), (
+            f"Images differ significantly for {shear}: max_diff={max_image_diff:.2e}"
+        )
+
+        assert np.allclose(
+            ngmix_obs.psf.image, jax_obs.psf.image, rtol=1e-6, atol=1e-8
+        ), f"PSF images differ significantly for {shear}: max_diff={max_psf_diff:.2e}"
+
+        # NOTE: For weights ~1e10, float32 spacing is ~1e3
+        assert np.allclose(ngmix_obs.weight, jax_obs.weight, rtol=1e-7, atol=1e-7), (
+            f"Weights differ for {shear}: max_diff={max_weight_diff:.2e}, "
+            f"relative_err={rel_weight_diff:.2e}"
+        )
+
+        # Compare other attributes if they exist
+        if ngmix_obs.has_bmask() and jax_obs.has_bmask():
+            assert np.array_equal(ngmix_obs.bmask, jax_obs.bmask), (
+                f"bmask differs for {shear}"
+            )
+
+        if ngmix_obs.has_noise() and jax_obs.has_noise():
+            noise_diff = np.max(np.abs(ngmix_obs.noise - jax_obs.noise))
+            max_noise = np.max(np.abs(ngmix_obs.noise))
+            rel_noise_diff = noise_diff / max_noise if max_noise > 0 else 0
+            print(
+                f"  Noise - max diff: {noise_diff:.2e} (relative: {rel_noise_diff:.2e})"
+            )
+            assert np.allclose(ngmix_obs.noise, jax_obs.noise, rtol=1e-6, atol=1e-7), (
+                f"Noise differs significantly for {shear}: max_diff={noise_diff:.2e}"
+            )
+
+        if ngmix_obs.has_mfrac() and jax_obs.has_mfrac():
+            mfrac_diff = np.max(np.abs(ngmix_obs.mfrac - jax_obs.mfrac))
+            max_mfrac = np.max(np.abs(ngmix_obs.mfrac))
+            rel_mfrac_diff = mfrac_diff / max_mfrac if max_mfrac > 0 else 0
+            print(
+                f"  Mfrac - max diff: {mfrac_diff:.2e} (relative: {rel_mfrac_diff:.2e})"
+            )
+            assert np.allclose(ngmix_obs.mfrac, jax_obs.mfrac, rtol=1e-6, atol=1e-7), (
+                f"Mfrac differs significantly for {shear}: max_diff={mfrac_diff:.2e}"
+            )
+
+    print(" All metacalibration results match within float32 precision!")
+
+    # Restore original precision mode
+    precision_config.use_mixed_precision(original_mode == "mixed")
 
 
 @pytest.mark.parametrize(

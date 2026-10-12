@@ -12,6 +12,8 @@ from deep_field_metadetect.jaxify.jax_sims import (
 )
 from deep_field_metadetect.metacal import DEFAULT_SHEARS
 
+jax.config.update("jax_enable_x64", True)
+
 
 def test_vmap_metadetect():
     """Test vmapping jax_multi_band_deep_field_metadetect_jitted."""
