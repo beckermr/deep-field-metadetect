@@ -1,16 +1,106 @@
+import os
 from functools import partial
 
 import jax
 import jax.numpy as jnp
 import jax_galsim
+import numpy as np
+from astropy.io import fits
 
-from deep_field_metadetect.jaxify import jax_dfmd_defaults
+from deep_field_metadetect.jaxify import jax_dfmd_defaults, precision_config
 from deep_field_metadetect.jaxify.observation import (
     DFMdetMultiBandObsList,
     DFMdetObservation,
     DFMdetObsList,
     DFMdetPSF,
 )
+
+
+def load_cosmos_catalog(catalog_path: str = None, use_test_catalog: bool = False):
+    """Load COSMOS catalog with bulge+disk galaxy properties.
+
+    Parameters
+    ----------
+    catalog_path : str, optional
+        Path to COSMOS catalog FITS file. If None, uses default location.
+    use_test_catalog : bool
+        If True, use the small test catalog (30 objects). Default: False.
+
+    Returns
+    -------
+    catalog_data : dict
+        Dictionary containing galaxy properties as JAX arrays
+    """
+    if catalog_path is None:
+        # Get default catalog path
+        module_dir = os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))
+        )  # deep_field_metadetect/
+        if use_test_catalog:
+            catalog_path = os.path.join(
+                module_dir, "jaxify", "data", "test_catalog_30objects.fits"
+            )
+        else:
+            catalog_path = os.path.join(
+                module_dir, "jaxify", "data", "COSMOSWeb_mastercatalog_v1.fits"
+            )
+
+    print(f"Loading COSMOS catalog from: {catalog_path}")
+
+    # Load catalog
+    with fits.open(catalog_path) as hdul:
+        data = hdul[6].data  # B+D HDU
+
+        # Extract bulge and disk properties
+        radius_disk_deg = data["disk_radius_deg"]
+        radius_bulge_deg = data["bulge_radius_deg"]
+        disk_axratio = data["disk_axratio"]
+        bulge_axratio = data["bulge_axratio"]
+        angle_bd = data["angle_bd"]
+
+        # Extract HSC magnitudes for bulge and disk
+        mag_bulge_g = data["mag_model_bulge_hsc-g"]
+        mag_bulge_r = data["mag_model_bulge_hsc-r"]
+        mag_bulge_i = data["mag_model_bulge_hsc-i"]
+        mag_bulge_z = data["mag_model_bulge_hsc-z"]
+        mag_bulge_y = data["mag_model_bulge_hsc-y"]
+
+        mag_disk_g = data["mag_model_disk_hsc-g"]
+        mag_disk_r = data["mag_model_disk_hsc-r"]
+        mag_disk_i = data["mag_model_disk_hsc-i"]
+        mag_disk_z = data["mag_model_disk_hsc-z"]
+        mag_disk_y = data["mag_model_disk_hsc-y"]
+
+    # Convert radii from degrees to arcsec
+    radius_disk = radius_disk_deg * 3600.0
+    radius_bulge = radius_bulge_deg * 3600.0
+
+    # Prepare arrays (convert to float32 for JAX)
+    mag_bulge_arr = np.stack(
+        [mag_bulge_g, mag_bulge_r, mag_bulge_i, mag_bulge_z, mag_bulge_y], axis=1
+    ).astype(np.float32)
+    mag_disk_arr = np.stack(
+        [mag_disk_g, mag_disk_r, mag_disk_i, mag_disk_z, mag_disk_y], axis=1
+    ).astype(np.float32)
+    radius_bulge_arr = radius_bulge.astype(np.float32)
+    radius_disk_arr = radius_disk.astype(np.float32)
+    bulge_axratio_arr = bulge_axratio.astype(np.float32)
+    disk_axratio_arr = disk_axratio.astype(np.float32)
+    angle_bd_arr = angle_bd.astype(np.float32)
+
+    n_galaxies = len(data)
+    print(f"Loaded {n_galaxies} galaxies from COSMOS catalog")
+
+    return {
+        "mag_bulge": mag_bulge_arr,
+        "mag_disk": mag_disk_arr,
+        "radius_bulge": radius_bulge_arr,
+        "radius_disk": radius_disk_arr,
+        "bulge_axratio": bulge_axratio_arr,
+        "disk_axratio": disk_axratio_arr,
+        "angle_bd": angle_bd_arr,
+        "n_galaxies": n_galaxies,
+    }
 
 
 @partial(
@@ -66,13 +156,20 @@ def _make_jax_galsim_single_sim_jitted(
         minimum_fft_size=psf_fft_size, maximum_fft_size=psf_fft_size
     )
 
-    # Draw object image
-    obj_image = obj_fixed.drawImage(nx=dim, ny=dim, scale=scale, method="auto").array
+    # Draw object image with controlled precision (read module-level dtype)
+    obj_image = obj_fixed.drawImage(
+        nx=dim, ny=dim, scale=scale, method="auto", dtype=precision_config.IMAGE_DTYPE
+    ).array
+
     noise = jax.random.normal(key, shape=(dim, dim)) * nse
+    noise = noise.astype(precision_config.NOISE_DTYPE)
 
     image = obj_image + noise
-    weight = jnp.ones((dim, dim), dtype=jnp.float_) / nse**2
-    psf_image = psf_fixed.drawImage(nx=dim_psf, ny=dim_psf, scale=scale).array
+    weight = jnp.ones((dim, dim), dtype=precision_config.WEIGHT_DTYPE) / nse**2
+
+    psf_image = psf_fixed.drawImage(
+        nx=dim_psf, ny=dim_psf, scale=scale, dtype=precision_config.PSF_DTYPE
+    ).array
     wcs = jax_galsim.wcs.AffineTransform(
         dudx=scale,
         dudy=0.0,
@@ -94,17 +191,17 @@ def _make_jax_galsim_single_sim_jitted(
         ),
     )
 
-    # Create observation
+    # Create observation (read module-level dtypes)
     obs = DFMdetObservation(
         image=image,
         weight=weight,
         noise=noise,
-        bmask=jnp.zeros((dim, dim), dtype=jnp.int32),
-        mfrac=jnp.zeros((dim, dim), dtype=jnp.float64),
+        bmask=jnp.zeros((dim, dim), dtype=precision_config.BMASK_DTYPE),
+        mfrac=jnp.zeros((dim, dim), dtype=precision_config.MFRAC_DTYPE),
         wcs=wcs,
         psf=DFMdetPSF(
             image=psf_image,
-            weight=jnp.ones_like(psf_image),
+            weight=jnp.ones((dim_psf, dim_psf), dtype=precision_config.WEIGHT_DTYPE),
             wcs=psf_wcs,
         ),
     )
@@ -230,7 +327,9 @@ def make_jax_galsim_simple_sim_jitted(
     gal_psf_conv = jax_galsim.Convolve([gal, psf]).withGSParams(
         minimum_fft_size=image_fft_size, maximum_fft_size=image_fft_size
     )
-    im = gal_psf_conv.drawImage(nx=dim, ny=dim, scale=scale).array
+    im = gal_psf_conv.drawImage(
+        nx=dim, ny=dim, scale=scale, dtype=precision_config.IMAGE_DTYPE
+    ).array
     nse = jnp.sqrt(jnp.sum(im**2)) / s2n
 
     # Apply flux factor
@@ -436,6 +535,8 @@ def make_jax_cosmos_field_jitted(
     psf_fwhm: tuple[float, ...],
     zeropoint: tuple[float, ...],
     bands: tuple[str, ...] = ("g", "r", "i", "z", "y"),
+    g1: float = 0.0,
+    g2: float = 0.0,
     deep_noise_fac: float = 1.0 / jnp.sqrt(10),
     deep_psf_fac: float = 1.0,
     n_galaxies: int = 10,
@@ -478,6 +579,8 @@ def make_jax_cosmos_field_jitted(
         Example: (27.0, 27.5, 27.8, 27.6, 27.4) for different band depths
     bands : tuple of str
         Band names (static, default: ("g", "r", "i", "z", "y"))
+    g1, g2 : float
+        External shear components applied to all galaxies (default: 0.0)
     deep_noise_fac : float
         Deep field noise factor (default: 1/√10)
     deep_psf_fac : float
@@ -595,6 +698,8 @@ def make_jax_cosmos_field_jitted(
             bulge = bulge.withFlux(band_fluxes_bulge[i])
 
             gal = jax_galsim.Add([bulge, disk])
+            # Apply external shear (for calibration)
+            gal = gal.shear(g1=g1, g2=g2)
             gal = gal.rotate(sampled_angle[i] * jax_galsim.degrees)
             gal = gal.shift(shifts[i, 0], shifts[i, 1])
 
