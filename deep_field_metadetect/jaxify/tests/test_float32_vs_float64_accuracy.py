@@ -4,9 +4,7 @@ Tests numerical consistency and shear calibration accuracy between
 mixed precision (float32) and full precision (float64) modes.
 """
 
-import jax
 import numpy as np
-import pytest
 
 from deep_field_metadetect.jaxify import precision_config
 from deep_field_metadetect.jaxify.jax_metadetect import (
@@ -16,26 +14,19 @@ from deep_field_metadetect.jaxify.jax_utils import compute_dk, compute_kim_size
 from deep_field_metadetect.utils import make_simple_sim
 
 
-def run_mdet_with_precision(use_float32=False, enable_x64=None):
+def run_mdet_with_precision(use_float32=False):
     """Run metadetect with specified precision configuration.
 
     Parameters
     ----------
     use_float32 : bool, optional
-        If True, use mixed precision (float32). Default is False (float64).
-    enable_x64 : bool, optional
-        If specified, sets jax_enable_x64 to this value. If None, sets to
-        not use_float32 (True for float64 mode, False for float32 mode).
+        If True, use mixed precision (float32 images, float64 moments).
+        If False, use full float64 everywhere. Default is False.
     """
     if use_float32:
         precision_config.use_mixed_precision(enabled=True)
     else:
         precision_config.use_mixed_precision(enabled=False)
-
-    if enable_x64 is None:
-        enable_x64 = not use_float32
-
-    jax.config.update("jax_enable_x64", enable_x64)
 
     nxy = 201
     nxy_psf = 53
@@ -113,13 +104,11 @@ def compute_shear_response_from_catalog(cat, step=0.01):
     }
 
 
-@pytest.mark.parametrize("enable_x64", [True, False])
-def test_dtype_stability(enable_x64):
+def test_dtype_stability():
     """Test numerical stability between float32 and float64.
 
-    Compares full float64 (enable_x64=True) against mixed precision float32
-    with enable_x64 parameterized (True/False).
-    When using float32 and with enable_x64 moments are computed in float64.
+    Compares full float64 against mixed precision (float32 images, float64 moments).
+    Requires jax_enable_x64=True for float64 support.
 
     Tests:
     1. Object count consistency
@@ -128,11 +117,10 @@ def test_dtype_stability(enable_x64):
     4. Shear estimation (g1_est, g2_est)
     """
     original_mode = precision_config._CURRENT_MODE
-    original_x64 = jax.config.jax_enable_x64
 
     # Run metadetect with both precisions
-    res_f64 = run_mdet_with_precision(use_float32=False, enable_x64=True)
-    res_f32 = run_mdet_with_precision(use_float32=True, enable_x64=enable_x64)
+    res_f64 = run_mdet_with_precision(use_float32=False)
+    res_f32 = run_mdet_with_precision(use_float32=True)
 
     cat_f64 = res_f64["dfmdet_res"]
     cat_f32 = res_f32["dfmdet_res"]
@@ -145,14 +133,9 @@ def test_dtype_stability(enable_x64):
         np.array(cat_f32["wmom_flags"]) == 0
     )
 
-    # Set tolerances based on x64 mode
-    if enable_x64:
-        rtol = 1e-6  # Stricter when both use x64 (for moment calculation)
-        rtol_shear_est = 1e-6  # For shear estimation
-    else:
-        # this fails if rtol is 1e-3
-        rtol = 1e-2  # More relaxed when float32 mode doesn't use x64 at all
-        rtol_shear_est = 1e-2
+    # Set tolerances - strict since both use x64 for moment calculations
+    rtol = 1e-6  # Strict tolerance for mixed precision with x64 enabled
+    rtol_shear_est = 1e-6  # For shear estimation
 
     # Test 1: Object count
     n_valid_f64 = np.sum(msk64)
@@ -170,7 +153,7 @@ def test_dtype_stability(enable_x64):
         vals32 = np.array(cat_f32[field])[msk32]
 
         assert np.allclose(vals64, vals32, rtol=rtol), (
-            f"Field {field} differs beyond tolerance (enable_x64={enable_x64}):\n"
+            f"Field {field} differs beyond tolerance :\n"
             f"  Max abs diff: {np.max(np.abs(vals64 - vals32)):.10e}\n"
             f"  Max rel diff: {np.max(np.abs((vals64 - vals32) / vals64)) * 100:.6f}%\n"
             f"  Mean f64: {np.mean(vals64):.10e}\n"
@@ -185,7 +168,7 @@ def test_dtype_stability(enable_x64):
     # Test 3: Shear response (R11, R22)
     r11_diff = calib_f32["R11"] - calib_f64["R11"]
     assert np.isclose(calib_f32["R11"], calib_f64["R11"], rtol=rtol), (
-        f"R11 differs beyond tolerance (enable_x64={enable_x64}):\n"
+        f"R11 differs beyond tolerance :\n"
         f"  float64: {calib_f64['R11']:.10e}\n"
         f"  float32: {calib_f32['R11']:.10e}\n"
         f"  Abs diff: {r11_diff:.10e}\n"
@@ -195,7 +178,7 @@ def test_dtype_stability(enable_x64):
 
     r22_diff = calib_f32["R22"] - calib_f64["R22"]
     assert np.isclose(calib_f32["R22"], calib_f64["R22"], rtol=rtol), (
-        f"R22 differs beyond tolerance (enable_x64={enable_x64}):\n"
+        f"R22 differs beyond tolerance :\n"
         f"  float64: {calib_f64['R22']:.10e}\n"
         f"  float32: {calib_f32['R22']:.10e}\n"
         f"  Abs diff: {r22_diff:.10e}\n"
@@ -209,7 +192,7 @@ def test_dtype_stability(enable_x64):
 
     g1_est_diff = calib_f32["g1_est"] - calib_f64["g1_est"]
     assert np.isclose(calib_f32["g1_est"], calib_f64["g1_est"], rtol=rtol_shear_est), (
-        f"g1 estimate differs beyond tolerance (enable_x64={enable_x64}):\n"
+        f"g1 estimate differs beyond tolerance :\n"
         f"  float64: {calib_f64['g1_est']:.10e}\n"
         f"  float32: {calib_f32['g1_est']:.10e}\n"
         f"  True value: {g1_true}\n"
@@ -220,7 +203,7 @@ def test_dtype_stability(enable_x64):
 
     g2_est_diff = calib_f32["g2_est"] - calib_f64["g2_est"]
     assert np.isclose(calib_f32["g2_est"], calib_f64["g2_est"], rtol=rtol_shear_est), (
-        f"g2 estimate differs beyond tolerance (enable_x64={enable_x64}):\n"
+        f"g2 estimate differs beyond tolerance :\n"
         f"  float64: {calib_f64['g2_est']:.10e}\n"
         f"  float32: {calib_f32['g2_est']:.10e}\n"
         f"  True value: {g2_true}\n"
@@ -229,6 +212,5 @@ def test_dtype_stability(enable_x64):
         f"  Expected rtol: {rtol_shear_est}"
     )
 
-    # Restore original precision mode and x64 setting
+    # Restore original precision mode
     precision_config.use_mixed_precision(enabled=(original_mode == "mixed"))
-    jax.config.update("jax_enable_x64", original_x64)
