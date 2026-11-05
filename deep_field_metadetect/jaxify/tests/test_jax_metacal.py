@@ -36,8 +36,6 @@ from deep_field_metadetect.utils import (
     print_m_c,
 )
 
-jax.config.update("jax_enable_x64", True)
-
 
 def _run_single_sim_pair(seed, s2n):
     nxy = 53
