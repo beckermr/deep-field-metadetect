@@ -10,8 +10,8 @@ from deep_field_metadetect.detect import (
 )
 from deep_field_metadetect.jaxify import jax_dfmd_defaults, precision_config
 from deep_field_metadetect.jaxify.jax_detection import (
+    _get_subobs_jax,
     detect_galaxies,
-    jax_batch_generate_mbobs_for_detections,
     jax_make_mb_coadd_from_list,
 )
 from deep_field_metadetect.jaxify.jax_metacal import (
@@ -26,7 +26,7 @@ from deep_field_metadetect.jaxify.jax_utils import (
 )
 from deep_field_metadetect.jaxify.observation import (
     dfmd_obs_to_ngmix_obs,
-    jax_get_mb_obs,
+    pad_observation,
 )
 
 logger = logging.getLogger(__name__)
@@ -180,45 +180,36 @@ def _process_detections_for_shear(
 
     # Pad observations once before extracting sub-observations
     pad_width = moment_stamp_size // 2 + 1
-    padded_mbobs = jax_get_mb_obs(mcal_obs, pad_width=pad_width)
+    padded_obs = pad_observation(mcal_obs, pad_width)
 
     padded_xs = x_coords + pad_width
     padded_ys = y_coords + pad_width
 
-    # Use batched function to extract all sub-observations at once
-    _, padded_xs_out, padded_ys_out, all_subobs = (
-        jax_batch_generate_mbobs_for_detections(
-            padded_mbobs,
-            xs=padded_xs,
-            ys=padded_ys,
-            box_size=moment_stamp_size,
-        )
-    )
-
     # Process all detections in batch
     obj_ids = jnp.arange(1, max_objects + 1, dtype=jnp.int64)
 
-    def process_detection(
-        subobs, obj_id, obj_x, obj_y, bmask_flag, mfrac_val, det_flag_val
-    ):
+    # Fuse extraction and processing into a single vmapped function
+    def extract_and_process_single(x, y, obj_id, bmask_flag, mfrac_val, det_flag_val):
+        """Extract sub-observations for a single detection and process it."""
+        sub_obs = _get_subobs_jax(padded_obs, x, y, moment_stamp_size)
+
         return jax_fit_single_detection(
-            mbobs=subobs[0][0],
+            mbobs=sub_obs,
             psf_res=psf_res,
             obj_id=obj_id,
-            obj_x=obj_x,
-            obj_y=obj_y,
+            obj_x=x - pad_width,
+            obj_y=y - pad_width,
             shear_idx=shear_idx,
             bmask_flag=bmask_flag,
             mfrac_val=mfrac_val,
             det_flag=det_flag_val,
         )
 
-    # Vectorize
-    batch_results = jax.vmap(process_detection)(
-        all_subobs,
+    # Vectorize the fused extraction + processing
+    batch_results = jax.vmap(extract_and_process_single)(
+        padded_xs,
+        padded_ys,
         obj_ids,
-        padded_xs_out - pad_width,
-        padded_ys_out - pad_width,
         bmask_flags,
         mfrac_vals,
         det_flag,

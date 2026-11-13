@@ -14,6 +14,7 @@ from deep_field_metadetect.jaxify.jax_metadetect import (
 )
 from deep_field_metadetect.jaxify.jax_sims import (
     generate_jax_galsim_multiband_sim_observations_jitted,
+    load_cosmos_catalog,
     make_jax_cosmos_field_jitted,
 )
 from deep_field_metadetect.utils import (
@@ -367,61 +368,13 @@ def test_cosmos_field_generation():
 
     Uses pre-filtered test catalog with 30 valid B+D galaxies.
     """
-    import os
+    # Load catalog using shared utility function
+    catalog = load_cosmos_catalog(use_test_catalog=True)
 
-    from astropy.io import fits
-
-    catalog_path = os.path.join(
-        os.path.dirname(__file__),
-        "..",
-        "data",
-        "test_catalog_30objects.fits",
+    print(f"Loaded {catalog['n_galaxies']} pre-filtered B+D galaxies")
+    assert catalog["n_galaxies"] == 30, (
+        f"Expected 30 objects in test catalog, got {catalog['n_galaxies']}"
     )
-
-    # Load pre-filtered catalog B+D HDU
-    print(f"Loading COSMOS B+D test catalog from {catalog_path}")
-    with fits.open(catalog_path) as hdul:
-        data = hdul[6].data  # B+D HDU
-
-        # Extract bulge and disk properties
-        radius_disk_deg = data["disk_radius_deg"]
-        radius_bulge_deg = data["bulge_radius_deg"]
-        disk_axratio = data["disk_axratio"]
-        bulge_axratio = data["bulge_axratio"]
-        angle_bd = data["angle_bd"]
-
-        # Extract HSC magnitudes for bulge and disk
-        mag_bulge_g = data["mag_model_bulge_hsc-g"]
-        mag_bulge_r = data["mag_model_bulge_hsc-r"]
-        mag_bulge_i = data["mag_model_bulge_hsc-i"]
-        mag_bulge_z = data["mag_model_bulge_hsc-z"]
-        mag_bulge_y = data["mag_model_bulge_hsc-y"]
-
-        mag_disk_g = data["mag_model_disk_hsc-g"]
-        mag_disk_r = data["mag_model_disk_hsc-r"]
-        mag_disk_i = data["mag_model_disk_hsc-i"]
-        mag_disk_z = data["mag_model_disk_hsc-z"]
-        mag_disk_y = data["mag_model_disk_hsc-y"]
-
-    # Convert radii from degrees to arcsec
-    radius_disk = radius_disk_deg * 3600.0
-    radius_bulge = radius_bulge_deg * 3600.0
-
-    print(f"Loaded {len(data)} pre-filtered B+D galaxies")
-    assert len(data) == 30, f"Expected 30 objects in test catalog, got {len(data)}"
-
-    # Prepare NumPy arrays
-    mag_bulge_arr = np.stack(
-        [mag_bulge_g, mag_bulge_r, mag_bulge_i, mag_bulge_z, mag_bulge_y], axis=1
-    ).astype(np.float32)
-    mag_disk_arr = np.stack(
-        [mag_disk_g, mag_disk_r, mag_disk_i, mag_disk_z, mag_disk_y], axis=1
-    ).astype(np.float32)
-    radius_bulge_arr = radius_bulge.astype(np.float32)
-    radius_disk_arr = radius_disk.astype(np.float32)
-    bulge_axratio_arr = bulge_axratio.astype(np.float32)
-    disk_axratio_arr = disk_axratio.astype(np.float32)
-    angle_bd_arr = angle_bd.astype(np.float32)
 
     # Test basic function call
     key = jax.random.PRNGKey(42)
@@ -434,13 +387,13 @@ def test_cosmos_field_generation():
     print(f"\nGenerating field with {n_galaxies} B+D galaxies...")
     mb_obs_wide, mb_obs_deep, mb_obs_deep_noise = make_jax_cosmos_field_jitted(
         key,
-        mag_bulge=mag_bulge_arr,
-        mag_disk=mag_disk_arr,
-        radius_bulge=radius_bulge_arr,
-        radius_disk=radius_disk_arr,
-        bulge_axratio=bulge_axratio_arr,
-        disk_axratio=disk_axratio_arr,
-        angle_bd=angle_bd_arr,
+        mag_bulge=catalog["mag_bulge"],
+        mag_disk=catalog["mag_disk"],
+        radius_bulge=catalog["radius_bulge"],
+        radius_disk=catalog["radius_disk"],
+        bulge_axratio=catalog["bulge_axratio"],
+        disk_axratio=catalog["disk_axratio"],
+        angle_bd=catalog["angle_bd"],
         noise_std=noise_std,
         psf_fwhm=psf_fwhm,
         zeropoint=zeropoint,
