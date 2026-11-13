@@ -37,3 +37,9 @@ profile = "black"
 [tool.ruff.lint]
 select = ["E", "F", "W"]
 preview = true
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "float32_only: marks tests to run only in pure float32 mode (requires --float32-only flag)",
+]
