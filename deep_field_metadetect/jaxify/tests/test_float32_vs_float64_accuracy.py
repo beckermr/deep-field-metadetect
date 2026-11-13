@@ -120,7 +120,7 @@ def test_dtype_stability():
     3. Shear response (R11, R22)
     4. Shear estimation (g1_est, g2_est)
     """
-    original_mode = precision_config._CURRENT_MODE
+    original_mode = precision_config.get_precision_mode()
 
     # Run metadetect with both precisions
     res_f64 = run_mdet_with_precision(use_float32=False)
@@ -232,7 +232,7 @@ def test_jax_float32_vs_non_jax_float64():
         "Run with: JAX_ENABLE_X64=false pytest --float32-only"
     )
 
-    original_mode = precision_config._CURRENT_MODE
+    original_mode = precision_config.get_precision_mode()
     precision_config.use_mixed_precision(enabled=True)
 
     nxy = 201

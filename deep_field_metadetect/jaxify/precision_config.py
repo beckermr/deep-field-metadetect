@@ -52,6 +52,17 @@ def use_mixed_precision(enabled: bool = True):
     jax.clear_caches()
 
 
+def get_precision_mode() -> str:
+    """Return the current precision mode.
+
+    Returns
+    -------
+    mode : str
+        ``mixed`` if mixed precision is enabled, ``full`` otherwise.
+    """
+    return _CURRENT_MODE
+
+
 def get_precision_summary() -> dict[str, str]:
     """Return summary of current precision settings.
 
@@ -61,7 +72,7 @@ def get_precision_summary() -> dict[str, str]:
         Dictionary with current precision mode and dtype settings
     """
     return {
-        "mode": _CURRENT_MODE,
+        "mode": get_precision_mode(),
         "image_dtype": str(IMAGE_DTYPE),
         "weight_dtype": str(WEIGHT_DTYPE),
         "noise_dtype": str(NOISE_DTYPE),
