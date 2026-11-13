@@ -36,8 +36,6 @@ from deep_field_metadetect.utils import (
     print_m_c,
 )
 
-jax.config.update("jax_enable_x64", True)
-
 
 def _run_single_sim_pair(seed, s2n):
     nxy = 53
@@ -637,7 +635,7 @@ def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix_float64():
     return the same results.
     """
     # Force float64 mode for this test to match ngmix precision
-    original_mode = precision_config._CURRENT_MODE
+    original_mode = precision_config.get_precision_mode()
     precision_config.use_mixed_precision(False)
 
     nxy = 201
@@ -806,7 +804,7 @@ def test_metacal_wide_and_deep_psf_matched_jax_vs_ngmix_float32():
     produce numerically close results in mixed precision (float32) mode.
     """
     # Force mixed precision (float32) mode
-    original_mode = precision_config._CURRENT_MODE
+    original_mode = precision_config.get_precision_mode()
     precision_config.use_mixed_precision(True)
 
     nxy = 201

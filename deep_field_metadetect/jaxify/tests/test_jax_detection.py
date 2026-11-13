@@ -1,4 +1,3 @@
-import jax
 import jax.numpy as jnp
 import numpy as np
 
@@ -10,8 +9,6 @@ from deep_field_metadetect.jaxify.jax_detection import (
     watershed_from_peaks,
     watershed_segmentation,
 )
-
-jax.config.update("jax_enable_x64", True)
 
 
 def create_gaussian_blob(shape, center, sigma=1.0, amplitude=1.0):

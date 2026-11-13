@@ -169,7 +169,7 @@ def benchmark_gpu_vmapped(
     times = []
 
     # Detect precision mode from precision_config
-    precision_mode = precision_config._CURRENT_MODE
+    precision_mode = precision_config.get_precision_mode()
 
     # Start profiling if requested (only profile n_runs, not compilation)
     if profile and profile_dir:
@@ -273,7 +273,7 @@ def generate_test_data(
         first_obs = obs_fields_jax[0][0]  # First field, wide observation
         first_band = list(first_obs.keys())[0]
         print("\n  [DEBUG] Generated data dtypes:")
-        print(f"    precision_config mode: {precision_config._CURRENT_MODE}")
+        print(f"    precision_config mode: {precision_config.get_precision_mode()}")
         print(f"    Image dtype (from data): {first_obs[first_band].image.dtype}")
         print(f"    Weight dtype (from data): {first_obs[first_band].weight.dtype}")
         print(f"    Expected IMAGE_DTYPE: {precision_config.IMAGE_DTYPE}")
@@ -440,7 +440,7 @@ def run_gpu_benchmark(
 
     if profile and profile_dir:
         # Detect precision mode for display
-        precision_mode = precision_config._CURRENT_MODE
+        precision_mode = precision_config.get_precision_mode()
         precision_summary = precision_config.get_precision_summary()
         print(f"\n{'Profiling':}")
         print(f"  Traces saved to: {profile_dir}/")
