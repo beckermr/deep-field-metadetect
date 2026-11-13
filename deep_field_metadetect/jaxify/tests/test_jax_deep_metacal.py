@@ -1,6 +1,5 @@
 import multiprocessing
 
-import jax
 import numpy as np
 import pytest
 
@@ -24,8 +23,6 @@ from deep_field_metadetect.utils import (
     measure_mcal_shear_quants,
     print_m_c,
 )
-
-jax.config.update("jax_enable_x64", True)
 
 
 def _run_single_sim(
