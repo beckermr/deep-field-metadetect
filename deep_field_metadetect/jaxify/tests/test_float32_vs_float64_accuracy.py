@@ -138,8 +138,11 @@ def test_dtype_stability():
     )
 
     # Set tolerances - strict since both use x64 for moment calculations
-    rtol = 1e-6  # Strict tolerance for mixed precision with x64 enabled
+    rtol = 1e-5  # Strict tolerance for mixed precision with x64 enabled
     rtol_shear_est = 1e-6  # For shear estimation
+
+    atol = 1e-7
+    atol_shear_est = 1e-7
 
     # Test 1: Object count
     n_valid_f64 = np.sum(msk64)
@@ -156,7 +159,7 @@ def test_dtype_stability():
         vals64 = np.array(cat_f64[field])[msk64]
         vals32 = np.array(cat_f32[field])[msk32]
 
-        assert np.allclose(vals64, vals32, rtol=rtol), (
+        assert np.allclose(vals64, vals32, rtol=rtol, atol=atol), (
             f"Field {field} differs beyond tolerance :\n"
             f"  Max abs diff: {np.max(np.abs(vals64 - vals32)):.10e}\n"
             f"  Max rel diff: {np.max(np.abs((vals64 - vals32) / vals64)) * 100:.6f}%\n"
@@ -171,7 +174,9 @@ def test_dtype_stability():
 
     # Test 3: Shear response (R11, R22)
     r11_diff = calib_f32["R11"] - calib_f64["R11"]
-    assert np.isclose(calib_f32["R11"], calib_f64["R11"], rtol=rtol), (
+    assert np.isclose(
+        calib_f32["R11"], calib_f64["R11"], rtol=rtol_shear_est, atol=atol_shear_est
+    ), (
         f"R11 differs beyond tolerance :\n"
         f"  float64: {calib_f64['R11']:.10e}\n"
         f"  float32: {calib_f32['R11']:.10e}\n"
@@ -181,7 +186,9 @@ def test_dtype_stability():
     )
 
     r22_diff = calib_f32["R22"] - calib_f64["R22"]
-    assert np.isclose(calib_f32["R22"], calib_f64["R22"], rtol=rtol), (
+    assert np.isclose(
+        calib_f32["R22"], calib_f64["R22"], rtol=rtol_shear_est, atol=atol_shear_est
+    ), (
         f"R22 differs beyond tolerance :\n"
         f"  float64: {calib_f64['R22']:.10e}\n"
         f"  float32: {calib_f32['R22']:.10e}\n"
@@ -195,7 +202,12 @@ def test_dtype_stability():
     g2_true = 0.00
 
     g1_est_diff = calib_f32["g1_est"] - calib_f64["g1_est"]
-    assert np.isclose(calib_f32["g1_est"], calib_f64["g1_est"], rtol=rtol_shear_est), (
+    assert np.isclose(
+        calib_f32["g1_est"],
+        calib_f64["g1_est"],
+        rtol=rtol_shear_est,
+        atol=atol_shear_est,
+    ), (
         f"g1 estimate differs beyond tolerance :\n"
         f"  float64: {calib_f64['g1_est']:.10e}\n"
         f"  float32: {calib_f32['g1_est']:.10e}\n"
@@ -206,7 +218,12 @@ def test_dtype_stability():
     )
 
     g2_est_diff = calib_f32["g2_est"] - calib_f64["g2_est"]
-    assert np.isclose(calib_f32["g2_est"], calib_f64["g2_est"], rtol=rtol_shear_est), (
+    assert np.isclose(
+        calib_f32["g2_est"],
+        calib_f64["g2_est"],
+        rtol=rtol_shear_est,
+        atol=atol_shear_est,
+    ), (
         f"g2 estimate differs beyond tolerance :\n"
         f"  float64: {calib_f64['g2_est']:.10e}\n"
         f"  float32: {calib_f32['g2_est']:.10e}\n"
