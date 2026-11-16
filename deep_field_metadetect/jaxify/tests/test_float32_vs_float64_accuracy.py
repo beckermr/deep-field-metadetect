@@ -143,7 +143,7 @@ def test_dtype_stability():
 
     atol = 1e-7
     atol_shear_est = 1e-7
-    
+
     # Test 1: Object count
     n_valid_f64 = np.sum(msk64)
     n_valid_f32 = np.sum(msk32)
@@ -174,7 +174,9 @@ def test_dtype_stability():
 
     # Test 3: Shear response (R11, R22)
     r11_diff = calib_f32["R11"] - calib_f64["R11"]
-    assert np.isclose(calib_f32["R11"], calib_f64["R11"], rtol=rtol_shear_est, atol=atol_shear_est), (
+    assert np.isclose(
+        calib_f32["R11"], calib_f64["R11"], rtol=rtol_shear_est, atol=atol_shear_est
+    ), (
         f"R11 differs beyond tolerance :\n"
         f"  float64: {calib_f64['R11']:.10e}\n"
         f"  float32: {calib_f32['R11']:.10e}\n"
@@ -184,7 +186,9 @@ def test_dtype_stability():
     )
 
     r22_diff = calib_f32["R22"] - calib_f64["R22"]
-    assert np.isclose(calib_f32["R22"], calib_f64["R22"], rtol=rtol_shear_est, atol=atol_shear_est), (
+    assert np.isclose(
+        calib_f32["R22"], calib_f64["R22"], rtol=rtol_shear_est, atol=atol_shear_est
+    ), (
         f"R22 differs beyond tolerance :\n"
         f"  float64: {calib_f64['R22']:.10e}\n"
         f"  float32: {calib_f32['R22']:.10e}\n"
@@ -198,7 +202,12 @@ def test_dtype_stability():
     g2_true = 0.00
 
     g1_est_diff = calib_f32["g1_est"] - calib_f64["g1_est"]
-    assert np.isclose(calib_f32["g1_est"], calib_f64["g1_est"], rtol=rtol_shear_est, atol=atol_shear_est), (
+    assert np.isclose(
+        calib_f32["g1_est"],
+        calib_f64["g1_est"],
+        rtol=rtol_shear_est,
+        atol=atol_shear_est,
+    ), (
         f"g1 estimate differs beyond tolerance :\n"
         f"  float64: {calib_f64['g1_est']:.10e}\n"
         f"  float32: {calib_f32['g1_est']:.10e}\n"
@@ -209,7 +218,12 @@ def test_dtype_stability():
     )
 
     g2_est_diff = calib_f32["g2_est"] - calib_f64["g2_est"]
-    assert np.isclose(calib_f32["g2_est"], calib_f64["g2_est"], rtol=rtol_shear_est, atol=atol_shear_est), (
+    assert np.isclose(
+        calib_f32["g2_est"],
+        calib_f64["g2_est"],
+        rtol=rtol_shear_est,
+        atol=atol_shear_est,
+    ), (
         f"g2 estimate differs beyond tolerance :\n"
         f"  float64: {calib_f64['g2_est']:.10e}\n"
         f"  float32: {calib_f32['g2_est']:.10e}\n"
